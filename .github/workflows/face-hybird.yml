@@ -19,6 +19,10 @@ on:
         description: '变异率'
         required: true
         default: '0.1'
+      face_source:
+        description: '人脸来源 (celebrities/random_people/anime/diverse)'
+        required: true
+        default: 'celebrities'
 
 jobs:
   hybridize-faces:
@@ -31,6 +35,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+
+      - name: 查看目录结构
+        run: |
+          pwd
+          ls -la
+          ls -la face_hybrid/ || echo "face_hybrid目录不存在"
 
       - name: 安装Python
         uses: actions/setup-python@v5
@@ -45,12 +55,12 @@ jobs:
 
       - name: 运行人脸杂交
         run: |
-          cd face_hybrid
-          python main.py \
+          python face_hybrid/main.py \
             --num-sources ${{ github.event.inputs.num_sources }} \
             --num-hybrids ${{ github.event.inputs.num_hybrids }} \
             --generations ${{ github.event.inputs.hybrid_generations }} \
-            --mutation-rate ${{ github.event.inputs.mutation_rate }}
+            --mutation-rate ${{ github.event.inputs.mutation_rate }} \
+            --source-type ${{ github.event.inputs.face_source }}
 
       - name: 提交结果
         run: |
