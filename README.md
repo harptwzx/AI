@@ -1,4 +1,4 @@
-# *red AI
+# AI
 A strange repository
 
 # images
