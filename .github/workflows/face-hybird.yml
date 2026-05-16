@@ -38,9 +38,17 @@ jobs:
 
       - name: 查看目录结构
         run: |
+          echo "当前目录:"
           pwd
+          echo ""
+          echo "根目录内容:"
           ls -la
-          ls -la face_hybrid/ || echo "face_hybrid目录不存在"
+          echo ""
+          echo "查找 face_hybrid:"
+          find . -name "face_hybrid" -type d 2>/dev/null || echo "未找到"
+          echo ""
+          echo "查找 main.py:"
+          find . -name "main.py" 2>/dev/null || echo "未找到"
 
       - name: 安装Python
         uses: actions/setup-python@v5
@@ -55,17 +63,32 @@ jobs:
 
       - name: 运行人脸杂交
         run: |
-          python face_hybrid/main.py \
-            --num-sources ${{ github.event.inputs.num_sources }} \
-            --num-hybrids ${{ github.event.inputs.num_hybrids }} \
-            --generations ${{ github.event.inputs.hybrid_generations }} \
-            --mutation-rate ${{ github.event.inputs.mutation_rate }} \
-            --source-type ${{ github.event.inputs.face_source }}
+          # 尝试多个可能的路径
+          if [ -f "face_hybrid/main.py" ]; then
+            python face_hybrid/main.py \
+              --num-sources ${{ github.event.inputs.num_sources }} \
+              --num-hybrids ${{ github.event.inputs.num_hybrids }} \
+              --generations ${{ github.event.inputs.hybrid_generations }} \
+              --mutation-rate ${{ github.event.inputs.mutation_rate }} \
+              --source-type ${{ github.event.inputs.face_source }}
+          elif [ -f "AI/face_hybrid/main.py" ]; then
+            python AI/face_hybrid/main.py \
+              --num-sources ${{ github.event.inputs.num_sources }} \
+              --num-hybrids ${{ github.event.inputs.num_hybrids }} \
+              --generations ${{ github.event.inputs.hybrid_generations }} \
+              --mutation-rate ${{ github.event.inputs.mutation_rate }} \
+              --source-type ${{ github.event.inputs.face_source }}
+          else
+            echo "错误: 找不到 face_hybrid/main.py"
+            echo "当前目录内容:"
+            ls -la
+            exit 1
+          fi
 
       - name: 提交结果
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add hybrid_results/ extracted_faces/ source_images/
+          git add hybrid_results/ extracted_faces/ source_images/ 2>/dev/null || true
           git diff --staged --quiet || git commit -m "添加杂交人脸"
           git push
