@@ -1,5 +1,0 @@
-Filename: generated_images/20260516_110841_Harry_Potter_stand_on_moon_and_he_is_seeing_the_ea.png
-Prompt: Harry Potter stand on moon and he is seeing the earth
-Steps: 20
-Format: png
-Timestamp: 20260516_110841
