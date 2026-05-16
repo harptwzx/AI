@@ -1,4 +1,4 @@
-<! AI >
+<!__AI__>
 A strange repository
 
 # images
