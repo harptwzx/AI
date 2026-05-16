@@ -6,13 +6,12 @@ on:
       num_sources:
         description: '采集源图片数量'
         required: false
-        default: '50'
+        default: '20'
         type: choice
         options:
           - '20'
           - '50'
           - '100'
-          - '200'
       num_hybrids:
         description: '生成杂交人脸数量'
         required: false
@@ -22,7 +21,6 @@ on:
           - '5'
           - '10'
           - '20'
-          - '50'
       hybrid_generations:
         description: '杂交代数'
         required: false
@@ -32,7 +30,6 @@ on:
           - '1'
           - '3'
           - '5'
-          - '10'
       mutation_rate:
         description: '变异率 (0.0-1.0)'
         required: false
@@ -44,10 +41,10 @@ on:
         default: 'celebrities'
         type: choice
         options:
-          - 'celebrities'    # 名人
-          - 'random_people'  # 随机人物
-          - 'anime'          # 动漫人脸
-          - 'diverse'        # 多样化
+          - 'celebrities'
+          - 'random_people'
+          - 'anime'
+          - 'diverse'
       min_face_size:
         description: '最小人脸尺寸(像素)'
         required: false
@@ -76,12 +73,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libgl1-mesa-glx \
+            libgl1 \
             libglib2.0-0 \
             libsm6 \
             libxext6 \
             libxrender-dev \
             libgomp1 \
+            libglib2.0-dev \
             wget
 
       - name: 安装 Python 依赖
@@ -93,10 +91,11 @@ jobs:
           pip install requests
           pip install scikit-image
           pip install scipy
-          pip install face-recognition
-          pip install cmake
-          pip install dlib
           pip install tqdm
+          
+          # face-recognition 需要 dlib，安装可能较慢
+          pip install dlib-bin || pip install dlib
+          pip install face-recognition
 
       - name: 运行人脸杂交程序
         env:
@@ -122,17 +121,18 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           # 添加所有生成的文件
-          git add hybrid_results/
-          git add extracted_faces/
+          git add hybrid_results/ 2>/dev/null || true
+          git add extracted_faces/ 2>/dev/null || true
+          git add source_images/ 2>/dev/null || true
           
           if ! git diff --staged --quiet; then
             git commit -m "🎭 生成杂交人脸 [skip actions]
             
-            源图片数: ${{ github.event.inputs.num_sources }}
-            杂交数量: ${{ github.event.inputs.num_hybrids }}
-            杂交代数: ${{ github.event.inputs.hybrid_generations }}
-            变异率: ${{ github.event.inputs.mutation_rate }}
-            人脸来源: ${{ github.event.inputs.face_source }}"
+源图片数: ${{ github.event.inputs.num_sources }}
+杂交数量: ${{ github.event.inputs.num_hybrids }}
+杂交代数: ${{ github.event.inputs.hybrid_generations }}
+变异率: ${{ github.event.inputs.mutation_rate }}
+人脸来源: ${{ github.event.inputs.face_source }}"
             
             git push origin main || git push origin master
             echo "✅ 杂交人脸已保存到仓库"
@@ -152,15 +152,15 @@ jobs:
           echo "- 人脸来源: ${{ github.event.inputs.face_source }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## 🎨 生成结果" >> $GITHUB_STEP_SUMMARY
+          echo "## 📁 输出文件" >> $GITHUB_STEP_SUMMARY
+          echo "- 提取的人脸: \`extracted_faces/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 杂交结果: \`hybrid_results/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 源图片: \`source_images/\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ -f hybrid_results/summary.txt ]; then
+            echo "## 📝 详细摘要" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             cat hybrid_results/summary.txt >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
-          
-          echo "## 📁 输出文件" >> $GITHUB_STEP_SUMMARY
-          echo "- 提取的人脸: \`extracted_faces/\`" >> $GITHUB_STEP_SUMMARY
-          echo "- 杂交结果: \`hybrid_results/\`" >> $GITHUB_STEP_SUMMARY
