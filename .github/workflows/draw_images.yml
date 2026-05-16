@@ -1,0 +1,233 @@
+name: Deploy Image Generation AI (CPU)
+
+on:
+  workflow_dispatch:  # 手动触发
+    inputs:
+      prompt:
+        description: '图片描述（Prompt）'
+        required: true
+        default: 'a cute cat sitting on a chair'
+        type: string
+      steps:
+        description: '推理步数（越多越精细，但更慢）'
+        required: false
+        default: '20'
+        type: choice
+        options:
+          - '10'
+          - '20'
+          - '30'
+          - '50'
+      format:
+        description: '图片格式'
+        required: false
+        default: 'png'
+        type: choice
+        options:
+          - 'png'
+          - 'jpg'
+          - 'jpeg'
+
+jobs:
+  generate-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 允许推送到仓库
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev zlib1g-dev libpng-dev
+
+      - name: 安装 Python 依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install diffusers transformers accelerate pillow
+
+      - name: 生成图片并保存到仓库
+        env:
+          PROMPT: ${{ github.event.inputs.prompt }}
+          STEPS: ${{ github.event.inputs.steps }}
+          FORMAT: ${{ github.event.inputs.format }}
+        run: |
+          PROMPT="$PROMPT"
+          STEPS="$STEPS"
+          FORMAT="$FORMAT"
+          
+          echo "=========================================="
+          echo " 开始生成图片 (使用 Stable Diffusion v1-4)"
+          echo "=========================================="
+          echo "提示词: $PROMPT"
+          echo "推理步数: $STEPS"
+          echo "图片格式: $FORMAT"
+          echo "模型: CompVis/stable-diffusion-v1-4 (约4GB)"
+          echo "=========================================="
+          
+          python << 'PYTHON'
+          import torch
+          from diffusers import StableDiffusionPipeline, DDIMScheduler
+          import os
+          from datetime import datetime
+          import re
+          
+          prompt = os.environ.get('PROMPT', 'a cute cat')
+          steps = int(os.environ.get('STEPS', '20'))
+          img_format = os.environ.get('FORMAT', 'png').lower()
+          
+          # 生成安全的文件名（去除特殊字符）
+          safe_prompt = re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff]', '_', prompt)[:50]
+          timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+          
+          # 根据格式确定文件扩展名
+          if img_format in ['jpg', 'jpeg']:
+              ext = 'jpg'
+              save_format = 'JPEG'
+          else:
+              ext = 'png'
+              save_format = 'PNG'
+          
+          filename = f"generated_images/{timestamp}_{safe_prompt}.{ext}"
+          
+          # 创建输出目录
+          os.makedirs("generated_images", exist_ok=True)
+          
+          # 固定使用 v1-4 模型
+          model_id = "CompVis/stable-diffusion-v1-4"
+          print(" 加载标准模型 (v1-4, 约4GB, 首次下载较慢)...")
+          
+          print(" 加载模型中...")
+          
+          # 加载模型到 CPU
+          pipe = StableDiffusionPipeline.from_pretrained(
+              model_id,
+              torch_dtype=torch.float32,
+              safety_checker=None  # 禁用安全检查加快速度
+          )
+          pipe = pipe.to("cpu")
+          
+          # 使用 DDIM 调度器加速
+          pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+          
+          print("✅ 模型加载完成，开始生成图片...")
+          print(f"  预计需要 {steps * 2} 秒（CPU 模式）")
+          
+          # 生成图片
+          image = pipe(prompt, num_inference_steps=steps).images[0]
+          
+          # 保存图片到文件
+          if save_format == 'JPEG':
+              # JPEG 格式需要转换为 RGB
+              if image.mode != 'RGB':
+                  image = image.convert('RGB')
+              image.save(filename, format=save_format, quality=95)
+          else:
+              image.save(filename, format=save_format)
+          
+          print(f"图片生成完成！")
+          print(f"保存位置: {filename}")
+          print(f"文件大小: {os.path.getsize(filename)} bytes")
+          print(f"图片尺寸: {image.size}")
+          
+          # 保存图片信息到文件
+          with open('generated_images/latest_info.txt', 'w') as f:
+              f.write(f"Filename: {filename}\n")
+              f.write(f"Prompt: {prompt}\n")
+              f.write(f"Steps: {steps}\n")
+              f.write(f"Format: {img_format}\n")
+              f.write(f"Timestamp: {timestamp}\n")
+          
+          PYTHON
+
+      - name: 显示生成结果
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "图片生成结果"
+          echo "=========================================="
+          echo ""
+          echo "图片保存在 generated_images/ 目录"
+          echo ""
+          ls -lh generated_images/
+          echo ""
+          echo "=========================================="
+          echo ""
+
+      - name: 提交图片到 GitHub 仓库
+        run: |
+          # 配置 git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 添加生成的图片
+          git add generated_images/
+          
+          # 检查是否有变更
+          if git diff --staged --quiet; then
+            echo "没有新的图片需要提交"
+          else
+            # 提交变更
+            git commit -m "添加生成的图片 [skip actions]"
+            # 推送到仓库
+            git push
+            echo "✅ 图片已成功推送到仓库"
+          fi
+
+      - name: 添加到 Job Summary
+        run: |
+          python << 'EOF'
+          import os
+          from datetime import datetime
+          
+          # 读取最新图片信息
+          with open('generated_images/latest_info.txt', 'r') as f:
+              info = f.read()
+          
+          # 解析信息
+          for line in info.split('\n'):
+              if line.startswith('Filename:'):
+                  filename = line.split(': ')[1]
+              elif line.startswith('Prompt:'):
+                  prompt = line.split(': ')[1]
+              elif line.startswith('Steps:'):
+                  steps = line.split(': ')[1]
+          
+          # 获取 GitHub 仓库信息
+          repo = os.environ.get('GITHUB_REPOSITORY', '')
+          run_id = os.environ.get('GITHUB_RUN_ID', '')
+          
+          # 构建图片的原始文件 URL
+          raw_url = f"https://raw.githubusercontent.com/{repo}/main/{filename}"
+          
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write(f"## 生成的图片\n\n")
+              summary.write(f"**提示词:** {prompt}\n\n")
+              summary.write(f"**推理步数:** {steps}\n\n")
+              summary.write(f"**保存路径:** `{filename}`\n\n")
+              summary.write(f'<img src="{raw_url}" width="512" alt="Generated Image">\n\n')
+              summary.write(f"### 查看图片\n\n")
+              summary.write(f"- [点击查看原始图片]({raw_url})\n")
+              summary.write(f"- 图片保存在仓库的 `generated_images/` 目录\n")
+          EOF
+        env:
+          PROMPT: ${{ github.event.inputs.prompt }}
+          STEPS: ${{ github.event.inputs.steps }}
+
+      - name: 列出生成的图片
+        run: |
+          echo "##  本次生成的图片" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la generated_images/ >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
