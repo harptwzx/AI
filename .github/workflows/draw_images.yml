@@ -39,6 +39,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # 获取完整历史，避免冲突
 
       - name: 设置 Python
         uses: actions/setup-python@v5
@@ -67,7 +68,7 @@ jobs:
           FORMAT="$FORMAT"
           
           echo "=========================================="
-          echo " 开始生成图片 (使用 Stable Diffusion v1-4)"
+          echo "🎨 开始生成图片 (使用 Stable Diffusion v1-4)"
           echo "=========================================="
           echo "提示词: $PROMPT"
           echo "推理步数: $STEPS"
@@ -105,9 +106,9 @@ jobs:
           
           # 固定使用 v1-4 模型
           model_id = "CompVis/stable-diffusion-v1-4"
-          print(" 加载标准模型 (v1-4, 约4GB, 首次下载较慢)...")
+          print("📦 加载标准模型 (v1-4, 约4GB, 首次下载较慢)...")
           
-          print(" 加载模型中...")
+          print("⏳ 加载模型中...")
           
           # 加载模型到 CPU
           pipe = StableDiffusionPipeline.from_pretrained(
@@ -121,7 +122,7 @@ jobs:
           pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
           
           print("✅ 模型加载完成，开始生成图片...")
-          print(f"  预计需要 {steps * 2} 秒（CPU 模式）")
+          print(f"⏱️  预计需要 {steps * 2} 秒（CPU 模式）")
           
           # 生成图片
           image = pipe(prompt, num_inference_steps=steps).images[0]
@@ -135,10 +136,10 @@ jobs:
           else:
               image.save(filename, format=save_format)
           
-          print(f"图片生成完成！")
-          print(f"保存位置: {filename}")
-          print(f"文件大小: {os.path.getsize(filename)} bytes")
-          print(f"图片尺寸: {image.size}")
+          print(f"✅ 图片生成完成！")
+          print(f"📁 保存位置: {filename}")
+          print(f"📊 文件大小: {os.path.getsize(filename)} bytes")
+          print(f"🎨 图片尺寸: {image.size}")
           
           # 保存图片信息到文件
           with open('generated_images/latest_info.txt', 'w') as f:
@@ -154,10 +155,10 @@ jobs:
         run: |
           echo ""
           echo "=========================================="
-          echo "图片生成结果"
+          echo "🎨 图片生成结果"
           echo "=========================================="
           echo ""
-          echo "图片保存在 generated_images/ 目录"
+          echo "📁 图片保存在 generated_images/ 目录"
           echo ""
           ls -lh generated_images/
           echo ""
@@ -170,6 +171,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
+          # 先拉取远程最新更改
+          echo "📥 拉取远程最新更改..."
+          git pull --rebase origin main || git pull --rebase origin master
+          
           # 添加生成的图片
           git add generated_images/
           
@@ -178,9 +183,9 @@ jobs:
             echo "没有新的图片需要提交"
           else
             # 提交变更
-            git commit -m "添加生成的图片 [skip actions]"
+            git commit -m "🎨 添加生成的图片 [skip actions]"
             # 推送到仓库
-            git push
+            git push origin main || git push origin master
             echo "✅ 图片已成功推送到仓库"
           fi
 
@@ -191,34 +196,46 @@ jobs:
           from datetime import datetime
           
           # 读取最新图片信息
-          with open('generated_images/latest_info.txt', 'r') as f:
-              info = f.read()
-          
-          # 解析信息
-          for line in info.split('\n'):
-              if line.startswith('Filename:'):
-                  filename = line.split(': ')[1]
-              elif line.startswith('Prompt:'):
-                  prompt = line.split(': ')[1]
-              elif line.startswith('Steps:'):
-                  steps = line.split(': ')[1]
-          
-          # 获取 GitHub 仓库信息
-          repo = os.environ.get('GITHUB_REPOSITORY', '')
-          run_id = os.environ.get('GITHUB_RUN_ID', '')
-          
-          # 构建图片的原始文件 URL
-          raw_url = f"https://raw.githubusercontent.com/{repo}/main/{filename}"
-          
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-              summary.write(f"## 生成的图片\n\n")
-              summary.write(f"**提示词:** {prompt}\n\n")
-              summary.write(f"**推理步数:** {steps}\n\n")
-              summary.write(f"**保存路径:** `{filename}`\n\n")
-              summary.write(f'<img src="{raw_url}" width="512" alt="Generated Image">\n\n')
-              summary.write(f"### 查看图片\n\n")
-              summary.write(f"- [点击查看原始图片]({raw_url})\n")
-              summary.write(f"- 图片保存在仓库的 `generated_images/` 目录\n")
+          info_file = 'generated_images/latest_info.txt'
+          if os.path.exists(info_file):
+              with open(info_file, 'r') as f:
+                  info = f.read()
+              
+              # 解析信息
+              filename = None
+              prompt = None
+              steps = None
+              for line in info.split('\n'):
+                  if line.startswith('Filename:'):
+                      filename = line.split(': ')[1]
+                  elif line.startswith('Prompt:'):
+                      prompt = line.split(': ')[1]
+                  elif line.startswith('Steps:'):
+                      steps = line.split(': ')[1]
+              
+              if filename:
+                  # 获取 GitHub 仓库信息
+                  repo = os.environ.get('GITHUB_REPOSITORY', '')
+                  
+                  # 构建图片的原始文件 URL
+                  raw_url = f"https://raw.githubusercontent.com/{repo}/main/{filename}"
+                  alt_url = f"https://raw.githubusercontent.com/{repo}/master/{filename}"
+                  
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                      summary.write(f"## 🎨 生成的图片\n\n")
+                      summary.write(f"**提示词:** {prompt}\n\n")
+                      summary.write(f"**推理步数:** {steps}\n\n")
+                      summary.write(f"**保存路径:** `{filename}`\n\n")
+                      
+                      # 尝试显示图片
+                      summary.write(f'<img src="{raw_url}" width="512" alt="Generated Image" onerror="this.onerror=null; this.src=\'{alt_url}\'">\n\n')
+                      summary.write(f"### 📁 查看图片\n\n")
+                      summary.write(f"- [点击查看原始图片]({raw_url})\n")
+                      summary.write(f"- 图片保存在仓库的 `generated_images/` 目录\n")
+          else:
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                  summary.write(f"## ⚠️ 未找到生成的图片\n\n")
+                  summary.write(f"请检查之前的步骤是否成功执行。\n")
           EOF
         env:
           PROMPT: ${{ github.event.inputs.prompt }}
@@ -226,7 +243,7 @@ jobs:
 
       - name: 列出生成的图片
         run: |
-          echo "##  本次生成的图片" >> $GITHUB_STEP_SUMMARY
+          echo "## 📸 本次生成的图片" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           ls -la generated_images/ >> $GITHUB_STEP_SUMMARY
