@@ -1,0 +1,5 @@
+Filename: generated_images/20260516_111726_A_beautiful_castle.png
+Prompt: A beautiful castle
+Steps: 30
+Format: png
+Timestamp: 20260516_111726
