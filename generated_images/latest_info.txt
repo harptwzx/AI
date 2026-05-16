@@ -1,13 +1,5 @@
-<<<<<<< Updated upstream
-Filename: generated_images/20260516_105328_a_cute_cat_sitting_on_a_chair.png
-Prompt: a cute cat sitting on a chair
+Filename: generated_images/20260516_110841_Harry_Potter_stand_on_moon_and_he_is_seeing_the_ea.png
+Prompt: Harry Potter stand on moon and he is seeing the earth
 Steps: 20
 Format: png
-Timestamp: 20260516_105328
-=======
-Filename: generated_images/20260516_105327_Harry_Potter_s_silhouette_on_the_moon.png
-Prompt: Harry Potter's silhouette on the moon
-Steps: 20
-Format: png
-Timestamp: 20260516_105327
->>>>>>> Stashed changes
+Timestamp: 20260516_110841
