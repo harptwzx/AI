@@ -1,0 +1,166 @@
+name: Face Hybrid Generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_sources:
+        description: '采集源图片数量'
+        required: false
+        default: '50'
+        type: choice
+        options:
+          - '20'
+          - '50'
+          - '100'
+          - '200'
+      num_hybrids:
+        description: '生成杂交人脸数量'
+        required: false
+        default: '10'
+        type: choice
+        options:
+          - '5'
+          - '10'
+          - '20'
+          - '50'
+      hybrid_generations:
+        description: '杂交代数'
+        required: false
+        default: '3'
+        type: choice
+        options:
+          - '1'
+          - '3'
+          - '5'
+          - '10'
+      mutation_rate:
+        description: '变异率 (0.0-1.0)'
+        required: false
+        default: '0.1'
+        type: string
+      face_source:
+        description: '人脸来源'
+        required: false
+        default: 'celebrities'
+        type: choice
+        options:
+          - 'celebrities'    # 名人
+          - 'random_people'  # 随机人物
+          - 'anime'          # 动漫人脸
+          - 'diverse'        # 多样化
+      min_face_size:
+        description: '最小人脸尺寸(像素)'
+        required: false
+        default: '100'
+        type: string
+
+jobs:
+  hybridize-faces:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-glx \
+            libglib2.0-0 \
+            libsm6 \
+            libxext6 \
+            libxrender-dev \
+            libgomp1 \
+            wget
+
+      - name: 安装 Python 依赖
+        run: |
+          pip install --upgrade pip
+          pip install opencv-python-headless
+          pip install numpy
+          pip install pillow
+          pip install requests
+          pip install scikit-image
+          pip install scipy
+          pip install face-recognition
+          pip install cmake
+          pip install dlib
+          pip install tqdm
+
+      - name: 运行人脸杂交程序
+        env:
+          NUM_SOURCES: ${{ github.event.inputs.num_sources }}
+          NUM_HYBRIDS: ${{ github.event.inputs.num_hybrids }}
+          HYBRID_GENERATIONS: ${{ github.event.inputs.hybrid_generations }}
+          MUTATION_RATE: ${{ github.event.inputs.mutation_rate }}
+          FACE_SOURCE: ${{ github.event.inputs.face_source }}
+          MIN_FACE_SIZE: ${{ github.event.inputs.min_face_size }}
+        run: |
+          cd face_hybrid
+          python main.py \
+            --num-sources $NUM_SOURCES \
+            --num-hybrids $NUM_HYBRIDS \
+            --generations $HYBRID_GENERATIONS \
+            --mutation-rate $MUTATION_RATE \
+            --source-type $FACE_SOURCE \
+            --min-face-size $MIN_FACE_SIZE
+
+      - name: 提交生成结果到仓库
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 添加所有生成的文件
+          git add hybrid_results/
+          git add extracted_faces/
+          
+          if ! git diff --staged --quiet; then
+            git commit -m "🎭 生成杂交人脸 [skip actions]
+            
+            源图片数: ${{ github.event.inputs.num_sources }}
+            杂交数量: ${{ github.event.inputs.num_hybrids }}
+            杂交代数: ${{ github.event.inputs.hybrid_generations }}
+            变异率: ${{ github.event.inputs.mutation_rate }}
+            人脸来源: ${{ github.event.inputs.face_source }}"
+            
+            git push origin main || git push origin master
+            echo "✅ 杂交人脸已保存到仓库"
+          else
+            echo "没有新文件生成"
+          fi
+
+      - name: 生成结果报告
+        run: |
+          echo "# 🎭 人脸杂交结果报告" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 参数配置" >> $GITHUB_STEP_SUMMARY
+          echo "- 源图片数量: ${{ github.event.inputs.num_sources }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 生成杂交数量: ${{ github.event.inputs.num_hybrids }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 杂交代数: ${{ github.event.inputs.hybrid_generations }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 变异率: ${{ github.event.inputs.mutation_rate }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 人脸来源: ${{ github.event.inputs.face_source }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🎨 生成结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f hybrid_results/summary.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat hybrid_results/summary.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "## 📁 输出文件" >> $GITHUB_STEP_SUMMARY
+          echo "- 提取的人脸: \`extracted_faces/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 杂交结果: \`hybrid_results/\`" >> $GITHUB_STEP_SUMMARY
