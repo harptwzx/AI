@@ -32,36 +32,38 @@ class FaceEncoder:
             hist = cv2.normalize(hist, hist).flatten()
             features.extend(hist)
         
-        # 2. 纹理特征 (LBP)
+        # 2. 纹理特征 (简化的LBP，不依赖skimage)
         gray = cv2.cvtColor(face_image, cv2.COLOR_BGR2GRAY)
         lbp = self._compute_lbp(gray)
         features.extend(lbp)
         
-        # 3. HOG特征 (方向梯度直方图)
-        hog_features = self._compute_hog(gray)
-        features.extend(hog_features)
+        # 3. 梯度方向直方图 (简化版HOG)
+        grad_features = self._compute_gradient_features(gray)
+        features.extend(grad_features)
         
-        # 4. Gabor特征 (多尺度)
-        gabor_features = self._compute_gabor_features(gray)
-        features.extend(gabor_features)
+        # 4. 面部区域特征
+        region_features = self._compute_region_features(gray)
+        features.extend(region_features)
         
-        # 5. 面部关键点相对位置
-        landmarks = self._detect_landmarks(gray)
-        features.extend(landmarks)
+        # 5. 统计特征
+        stat_features = self._compute_statistical_features(gray)
+        features.extend(stat_features)
         
         # 转换为numpy数组并归一化
         features = np.array(features, dtype=np.float32)
         
-        # PCA降维到目标维度
+        # 降维到目标维度
         if len(features) > self.feature_dim:
-            # 简单降维：取前N个最大的特征
-            features = features[:self.feature_dim]
+            # 均匀采样
+            indices = np.linspace(0, len(features)-1, self.feature_dim, dtype=int)
+            features = features[indices]
         elif len(features) < self.feature_dim:
             # 填充
             features = np.pad(features, (0, self.feature_dim - len(features)))
         
         # 归一化到[-1, 1]
-        features = (features - np.mean(features)) / (np.std(features) + 1e-8)
+        if np.std(features) > 1e-6:
+            features = (features - np.mean(features)) / (np.std(features) + 1e-8)
         features = np.clip(features, -1, 1)
         
         # 生成哈希
@@ -75,8 +77,8 @@ class FaceEncoder:
     
     def _compute_lbp(self, gray):
         """计算LBP纹理特征"""
-        lbp = np.zeros_like(gray)
         height, width = gray.shape
+        lbp = np.zeros((height-2, width-2), dtype=np.uint8)
         
         for i in range(1, height-1):
             for j in range(1, width-1):
@@ -90,47 +92,61 @@ class FaceEncoder:
                 code |= (gray[i+1, j] >= center) << 2
                 code |= (gray[i+1, j-1] >= center) << 1
                 code |= (gray[i, j-1] >= center) << 0
-                lbp[i, j] = code
+                lbp[i-1, j-1] = code
         
-        hist = cv2.calcHist([lbp.astype(np.uint8)], [0], None, [64], [0, 256])
+        hist = cv2.calcHist([lbp], [0], None, [64], [0, 256])
         hist = cv2.normalize(hist, hist).flatten()
         return hist
     
-    def _compute_hog(self, gray):
-        """计算HOG特征"""
-        from skimage.feature import hog
-        try:
-            features = hog(gray, orientations=9, pixels_per_cell=(8, 8),
-                          cells_per_block=(2, 2), visualize=False)
-            return features[:128]  # 取前128个
-        except:
-            return np.zeros(128)
+    def _compute_gradient_features(self, gray):
+        """计算梯度特征"""
+        grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        
+        magnitude = np.sqrt(grad_x**2 + grad_y**2)
+        angle = np.arctan2(grad_y, grad_x)
+        
+        # 梯度直方图
+        mag_hist = np.histogram(magnitude.flatten(), bins=16)[0]
+        angle_hist = np.histogram(angle.flatten(), bins=16)[0]
+        
+        return list(mag_hist) + list(angle_hist)
     
-    def _compute_gabor_features(self, gray):
-        """计算Gabor纹理特征"""
+    def _compute_region_features(self, gray):
+        """计算区域特征"""
+        h, w = gray.shape
         features = []
-        # 不同方向和尺度的Gabor滤波器
-        ksize = 31
-        for theta in [0, np.pi/4, np.pi/2, 3*np.pi/4]:
-            for sigma in [3, 5]:
-                kernel = cv2.getGaborKernel((ksize, ksize), sigma, theta, 10, 0.5, 0)
-                filtered = cv2.filter2D(gray, cv2.CV_32F, kernel)
-                features.append(np.mean(filtered))
-                features.append(np.std(filtered))
+        
+        # 将图像分成4x4区域
+        rows, cols = 4, 4
+        for i in range(rows):
+            for j in range(cols):
+                region = gray[i*h//rows:(i+1)*h//rows, j*w//cols:(j+1)*w//cols]
+                features.append(np.mean(region))
+                features.append(np.std(region))
+        
         return features
     
-    def _detect_landmarks(self, gray):
-        """检测面部关键点相对位置"""
-        # 使用OpenCV的人脸检测器获取面部区域比例
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        )
+    def _compute_statistical_features(self, gray):
+        """计算统计特征"""
+        features = []
         
-        faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+        # 基本统计量
+        features.append(np.mean(gray))
+        features.append(np.std(gray))
+        features.append(np.median(gray))
         
-        if len(faces) > 0:
-            x, y, w, h = faces[0]
-            # 返回面部区域的比例特征
-            return [x/gray.shape[1], y/gray.shape[0], w/gray.shape[1], h/gray.shape[0]]
-        else:
-            return [0.5, 0.5, 0.3, 0.3]
+        # 百分位数
+        for p in [10, 25, 50, 75, 90]:
+            features.append(np.percentile(gray, p))
+        
+        # 偏度和峰度
+        mean = np.mean(gray)
+        std = np.std(gray)
+        if std > 0:
+            skew = np.mean(((gray - mean) / std) ** 3)
+            kurt = np.mean(((gray - mean) / std) ** 4) - 3
+            features.append(skew)
+            features.append(kurt)
+        
+        return features
