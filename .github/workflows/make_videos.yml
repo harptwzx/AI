@@ -1,248 +1,92 @@
 # .github/workflows/hunyuan_video_generator.yml
-# HunyuanVideo 1.5 GitHub Actions 专用工作流
-
-name: HunyuanVideo 1.5 - 文本生成视频
+name: HunyuanVideo Generator
 
 on:
   workflow_dispatch:
     inputs:
       prompt:
-        description: '📝 视频描述提示词'
+        description: '视频描述'
         required: true
         type: string
-        default: 'A cinematic shot of a futuristic city at sunset, with flying cars moving through neon-lit streets, 4k, high quality'
-      
       negative_prompt:
-        description: '🚫 负面提示词（不需要的内容）'
+        description: '负面提示词'
         required: false
         type: string
-        default: 'low quality, blurry, distorted, ugly, bad anatomy, watermark'
-      
+        default: 'low quality, blurry'
       num_frames:
-        description: '🎬 视频帧数（49帧≈2秒，97帧≈4秒）'
+        description: '帧数(25/49/73/97)'
         required: false
-        type: choice
+        type: string
         default: '49'
-        options:
-          - '25'
-          - '49'
-          - '73'
-          - '97'
-      
       resolution:
-        description: '📐 视频分辨率'
+        description: '分辨率(720x480/640x360/480x320)'
         required: false
-        type: choice
+        type: string
         default: '720x480'
-        options:
-          - '720x480'
-          - '640x360'
-          - '480x320'
-      
-      inference_steps:
-        description: '⚙️ 推理步数（步数越多质量越好，速度越慢）'
-        required: false
-        type: choice
-        default: '20'
-        options:
-          - '15'
-          - '20'
-          - '25'
-          - '30'
-      
       seed:
-        description: '🎲 随机种子（留空则随机）'
+        description: '随机种子'
         required: false
         type: string
         default: '42'
 
-# 权限配置
-permissions:
-  contents: write
-  actions: read
-
 jobs:
-  generate-video:
-    name: 🎥 生成视频
+  generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    
     steps:
-      - name: 🔧 检出代码
-        uses: actions/checkout@v4
-      
-      - name: 🐍 设置Python环境
+      - name: Setup
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
       
-      - name: 📦 安装依赖
+      - name: Install
         run: |
-          pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install diffusers transformers accelerate sentencepiece protobuf
-          pip install opencv-python imageio imageio-ffmpeg huggingface_hub
+          pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg
       
-      - name: 🎬 生成视频
+      - name: Generate
         env:
           PROMPT: ${{ github.event.inputs.prompt }}
-          NEGATIVE_PROMPT: ${{ github.event.inputs.negative_prompt }}
-          NUM_FRAMES: ${{ github.event.inputs.num_frames }}
-          RESOLUTION: ${{ github.event.inputs.resolution }}
-          INFERENCE_STEPS: ${{ github.event.inputs.inference_steps }}
+          NEG_PROMPT: ${{ github.event.inputs.negative_prompt }}
+          FRAMES: ${{ github.event.inputs.num_frames }}
+          RES: ${{ github.event.inputs.resolution }}
           SEED: ${{ github.event.inputs.seed }}
         run: |
-          # 解析分辨率
-          IFS='x' read -r WIDTH HEIGHT <<< "$RESOLUTION"
-          
-          # 设置随机种子
-          if [ -z "$SEED" ]; then
-            SEED=$RANDOM
-          fi
-          
-          echo "=========================================="
-          echo "HunyuanVideo 1.5 CPU视频生成器"
-          echo "=========================================="
-          echo "提示词: $PROMPT"
-          echo "负面提示词: $NEGATIVE_PROMPT"
-          echo "分辨率: ${WIDTH}x${HEIGHT}"
-          echo "帧数: $NUM_FRAMES (约$((NUM_FRAMES/24))秒)"
-          echo "推理步数: $INFERENCE_STEPS"
-          echo "随机种子: $SEED"
-          echo "=========================================="
-          
-          # 创建输出目录
-          mkdir -p output
-          
-          # Python生成脚本
-          python3 << 'PYTHON_SCRIPT'
-          import os
-          import torch
+          IFS='x' read -r W H <<< "$RES"
+          python3 << 'EOF'
+          import os, torch
           from diffusers import HunyuanVideoPipeline, DDIMScheduler
           from diffusers.utils import export_to_video
           from datetime import datetime
           
-          # 获取环境变量
-          prompt = os.environ.get('PROMPT', '')
-          negative_prompt = os.environ.get('NEGATIVE_PROMPT', '')
-          num_frames = int(os.environ.get('NUM_FRAMES', 49))
-          width = int(os.environ.get('WIDTH', 720))
-          height = int(os.environ.get('HEIGHT', 480))
-          inference_steps = int(os.environ.get('INFERENCE_STEPS', 20))
-          seed = int(os.environ.get('SEED', 42))
+          w = int(os.environ['W'])
+          h = int(os.environ['H'])
           
-          print("📦 加载调度器...")
-          scheduler = DDIMScheduler.from_pretrained(
-              "Tencent-Hunyuan/HunyuanVideo-1.5",
-              subfolder="scheduler",
-              torch_dtype=torch.float32
-          )
-          
-          print("🎬 加载模型（首次运行下载约16GB）...")
           pipe = HunyuanVideoPipeline.from_pretrained(
               "Tencent-Hunyuan/HunyuanVideo-1.5",
-              scheduler=scheduler,
-              torch_dtype=torch.float32,
+              scheduler=DDIMScheduler.from_pretrained("Tencent-Hunyuan/HunyuanVideo-1.5", subfolder="scheduler"),
+              torch_dtype=torch.float32
           )
-          
-          print("⚙️ 配置CPU推理...")
           pipe.to("cpu")
           pipe.enable_model_cpu_offload()
           
-          generator = torch.Generator(device="cpu").manual_seed(seed)
-          
-          print("🎥 生成中...（约需10-30分钟）")
-          import time
-          start = time.time()
-          
-          output = pipe(
-              prompt=prompt,
-              negative_prompt=negative_prompt,
-              num_frames=num_frames,
-              width=width,
-              height=height,
-              num_inference_steps=inference_steps,
+          frames = pipe(
+              prompt=os.environ['PROMPT'],
+              negative_prompt=os.environ['NEG_PROMPT'],
+              num_frames=int(os.environ['FRAMES']),
+              width=w,
+              height=h,
+              num_inference_steps=20,
               guidance_scale=6.0,
-              generator=generator,
-          )
+              generator=torch.Generator("cpu").manual_seed(int(os.environ['SEED']))
+          ).frames[0]
           
-          video_frames = output.frames[0]
-          elapsed = time.time() - start
-          
-          print(f"✅ 生成完成！用时: {elapsed/60:.1f}分钟")
-          
-          # 保存视频
-          timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-          output_path = f"output/hunyuan_video_{timestamp}_seed{seed}.mp4"
-          export_to_video(video_frames, output_path, fps=24)
-          print(f"💾 视频已保存: {output_path}")
-          
-          # 保存到环境文件供后续步骤使用
-          with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write(f"VIDEO_PATH={output_path}\n")
-          PYTHON_SCRIPT
+          path = f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
+          export_to_video(frames, path, fps=24)
+          print(f"Saved: {path}")
+          EOF
       
-      - name: 📤 上传视频
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: generated-video-${{ github.run_id }}
-          path: output/*.mp4
-          retention-days: 7
-          compression-level: 0
-      
-      - name: 📝 创建Release
-        if: success()
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: video-${{ github.run_id }}
-          name: 🎬 生成的视频 - ${{ github.run_id }}
-          body: |
-            ## 生成参数
-            
-            - **提示词**: ${{ github.event.inputs.prompt }}
-            - **负面提示词**: ${{ github.event.inputs.negative_prompt }}
-            - **帧数**: ${{ github.event.inputs.num_frames }} (约${{ github.event.inputs.num_frames / 24 }}秒)
-            - **分辨率**: ${{ github.event.inputs.resolution }}
-            - **推理步数**: ${{ github.event.inputs.inference_steps }}
-            - **随机种子**: ${{ github.event.inputs.seed }}
-            
-            ## 下载
-            
-            视频文件已附加到本Release，请下载 `hunyuan_video_*.mp4`
-            
-            ---
-            
-            ⏱️ 生成耗时约10-30分钟（取决于GitHub Runner性能）
-          files: output/*.mp4
-          draft: false
-          prerelease: false
-      
-      - name: 📊 显示文件信息
-        if: success()
-        run: |
-          echo "=========================================="
-          echo "✅ 视频生成成功！"
-          echo "=========================================="
-          ls -lh output/
-          echo "=========================================="
-          echo "视频文件已上传至Artifacts和Release"
-          echo "可在Actions页面下载或查看Release"
-          echo "=========================================="
-      
-      - name: ❌ 错误处理
-        if: failure()
-        run: |
-          echo "=========================================="
-          echo "❌ 视频生成失败"
-          echo "=========================================="
-          echo "常见原因："
-          echo "1. GitHub Runner内存不足（默认7GB）"
-          echo "2. 模型下载失败（网络问题）"
-          echo "3. 生成超时（默认60分钟）"
-          echo ""
-          echo "建议："
-          echo "- 降低分辨率到640x360或480x320"
-          echo "- 减少帧数到25或49"
-          echo "- 减少推理步数到15"
-          echo "=========================================="
+          name: video
+          path: output_*.mp4
