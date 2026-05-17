@@ -1,5 +1,5 @@
-Filename: generated_images/20260516_111726_A_beautiful_castle.png
-Prompt: A beautiful castle
-Steps: 30
-Format: png
-Timestamp: 20260516_111726
+Filename: generated_images/20260517_115455_Hogwarts_Castle.jpg
+Prompt: Hogwarts Castle
+Steps: 50
+Format: jpg
+Timestamp: 20260517_115455
