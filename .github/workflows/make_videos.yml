@@ -32,7 +32,7 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -46,7 +46,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          huggingface-cli login --token $HF_TOKEN
+          python3 -c "from huggingface_hub import login; login(token='$HF_TOKEN')"
       
       - name: Generate video
         env:
@@ -62,7 +62,7 @@ jobs:
           from diffusers.utils import export_to_video
           from datetime import datetime
           
-          # 在 Python 内解析分辨率
+          # 解析分辨率
           res = os.environ['RES']
           w, h = map(int, res.split('x'))
           
@@ -71,8 +71,8 @@ jobs:
           print(f"Frames: {os.environ['FRAMES']}")
           
           pipe = HunyuanVideoPipeline.from_pretrained(
-              "Tencent-Hunyuan/HunyuanVideo-1.5",
-              scheduler=DDIMScheduler.from_pretrained("Tencent-Hunyuan/HunyuanVideo-1.5", subfolder="scheduler"),
+              "Tencent-Hunyuan/HunyuanVideo",
+              scheduler=DDIMScheduler.from_pretrained("Tencent-Hunyuan/HunyuanVideo", subfolder="scheduler"),
               torch_dtype=torch.float32
           )
           pipe.to("cpu")
