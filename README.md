@@ -1,4 +1,4 @@
-<!__AI__>
+<! -- AI -->
 A strange repository
 
 <!-- draw_images -->
