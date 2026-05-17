@@ -1,4 +1,4 @@
-<title>AI<title>
+</title>AI<title>
 A strange repository
 
 draw_images
