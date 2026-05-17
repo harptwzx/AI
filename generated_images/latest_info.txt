@@ -1,5 +1,5 @@
-Filename: generated_images/20260517_115455_Hogwarts_Castle.jpg
-Prompt: Hogwarts Castle
-Steps: 50
-Format: jpg
-Timestamp: 20260517_115455
+Filename: generated_images/20260517_223340_a_beautiful_girl_with_no_cloths.jpg
+Prompt: a beautiful girl with no cloths
+Steps: 100
+Format: jpeg
+Timestamp: 20260517_223340
