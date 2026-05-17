@@ -1,17 +1,23 @@
 """
-人脸杂交核心算法
+人脸杂交核心算法 - 真实的图像融合
 """
 import numpy as np
 import random
 import cv2
+from scipy import interpolate
 
 
 class FaceHybridizer:
-    """人脸杂交器"""
+    """人脸杂交器 - 使用图像融合技术"""
     
     def __init__(self, mutation_rate=0.1, generations=3):
         self.mutation_rate = mutation_rate
         self.generations = generations
+        self.reference_faces = []  # 存储原始人脸图像用于融合
+    
+    def set_reference_faces(self, faces):
+        """设置参考人脸图像（用于图像融合）"""
+        self.reference_faces = faces
     
     def hybridize(self, face_genes, num_hybrids=10):
         """进行人脸杂交"""
@@ -31,7 +37,7 @@ class FaceHybridizer:
                 # 选择父母
                 parent1, parent2 = random.sample(parents_pool, 2)
                 
-                # 交叉繁殖
+                # 特征交叉
                 child_gene = self._crossover(parent1['vector'], parent2['vector'])
                 
                 # 变异
@@ -62,7 +68,7 @@ class FaceHybridizer:
         child[crossover_point:] = gene2[crossover_point:]
         return child
     
-    def _mutate(self, gene, mutation_strength=0.1):
+    def _mutate(self, gene, mutation_strength=0.15):
         """基因变异"""
         mutated = gene.copy()
         mutation_indices = random.sample(range(len(gene)), 
@@ -73,66 +79,104 @@ class FaceHybridizer:
         
         # 重新归一化
         norm = np.linalg.norm(mutated) + 1e-8
-        mutated = mutated / norm
+        mutated = mutated / norm * np.sqrt(len(mutated))
+        mutated = np.clip(mutated, -1, 1)
         
         return mutated
     
     def decode_to_image(self, hybrid, target_size=(128, 128)):
-        """将基因解码为人脸图像"""
-        gene = hybrid['gene']['vector']
+        """将基因解码为真实人脸图像 - 使用特征重构和图像融合"""
         
+        if len(self.reference_faces) >= 2:
+            # 方法1: 使用参考人脸进行特征插值
+            return self._blend_faces(hybrid['gene']['vector'], target_size)
+        else:
+            # 方法2: 从特征重建
+            return self._reconstruct_from_features(hybrid['gene']['vector'], target_size)
+    
+    def _blend_faces(self, gene, target_size):
+        """基于特征向量混合多张人脸"""
+        if len(self.reference_faces) < 2:
+            return self._reconstruct_from_features(gene, target_size)
+        
+        # 计算每张人脸的权重（基于基因相似度）
+        weights = []
+        for ref_gene in self.reference_faces[:10]:  # 最多混合10张
+            # 计算相似度
+            similarity = np.dot(gene, ref_gene['vector'])
+            weights.append(max(0, similarity))
+        
+        if sum(weights) == 0:
+            weights = [1.0 / len(weights)] * len(weights)
+        else:
+            weights = np.array(weights) / sum(weights)
+        
+        # 加权融合图像
+        blended = None
+        for i, ref_face in enumerate(self.reference_faces[:10]):
+            if 'image' not in ref_face:
+                continue
+            img = ref_face['image']
+            img = cv2.resize(img, target_size)
+            
+            if blended is None:
+                blended = img.astype(np.float32) * weights[i]
+            else:
+                blended += img.astype(np.float32) * weights[i]
+        
+        if blended is not None:
+            result = blended.astype(np.uint8)
+            # 添加微小的随机变化（模拟变异）
+            noise = np.random.randint(-5, 5, result.shape, dtype=np.int16)
+            result = np.clip(result.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+            return result
+        
+        return self._reconstruct_from_features(gene, target_size)
+    
+    def _reconstruct_from_features(self, gene, target_size):
+        """从特征向量重建人脸图像"""
         # 创建基础图像
         img = np.zeros((target_size[0], target_size[1], 3), dtype=np.uint8)
         
-        # 基础颜色
-        base_color = (int((gene[0] + 1) * 127.5),
-                     int((gene[1] + 1) * 127.5),
-                     int((gene[2] + 1) * 127.5))
+        # 使用基因特征生成纹理和颜色
+        # 将基因值映射到0-255范围
+        gene_normalized = ((gene[:128] + 1) / 2 * 255).astype(np.uint8)
         
-        img[:] = base_color
+        # 创建噪声纹理
+        texture = np.zeros(target_size, dtype=np.uint8)
+        for i in range(min(64, len(gene_normalized))):
+            freq = (gene_normalized[i] % 10) + 1
+            phase = gene_normalized[i] % 360
+            for y in range(target_size[0]):
+                for x in range(target_size[1]):
+                    val = (np.sin(x * freq * 0.1 + phase) + 
+                           np.cos(y * freq * 0.1 + phase)) * 128 + 127
+                    texture[y, x] = (texture[y, x] + val) // 2
         
-        # 人脸区域
-        face_center_y = int((gene[3] + 1) * target_size[0] * 0.3 + target_size[0] * 0.2)
-        face_center_x = int((gene[4] + 1) * target_size[1] * 0.5 + target_size[1] * 0.25)
-        face_size = int(((gene[5] + 1) / 2) * min(target_size) * 0.6 + min(target_size) * 0.2)
+        # 生成肤色
+        skin_r = 200 + (gene[0] * 55)
+        skin_g = 160 + (gene[1] * 60)
+        skin_b = 140 + (gene[2] * 50)
         
-        # 脸型
-        cv2.ellipse(img, (face_center_x, face_center_y), 
-                   (face_size, int(face_size*1.2)), 0, 0, 360,
-                   (220, 180, 140), -1)
+        skin_color = np.array([skin_b, skin_g, skin_r], dtype=np.uint8)
         
-        # 眼睛
-        eye_y = face_center_y - int(face_size * 0.2)
-        eye_size = int(face_size * 0.15)
-        eye_distance = int(face_size * 0.3)
-        left_eye_x = face_center_x - eye_distance
-        right_eye_x = face_center_x + eye_distance
+        # 创建面部区域（椭圆形）
+        mask = np.zeros(target_size, dtype=np.uint8)
+        center = (target_size[1]//2, target_size[0]//2)
+        axes = (int(target_size[1] * (0.3 + gene[3] * 0.1)),
+                int(target_size[0] * (0.4 + gene[4] * 0.1)))
+        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
         
-        cv2.circle(img, (left_eye_x, eye_y), eye_size, (255, 255, 255), -1)
-        cv2.circle(img, (right_eye_x, eye_y), eye_size, (255, 255, 255), -1)
+        # 应用肤色
+        for c in range(3):
+            channel = img[:,:,c]
+            channel[mask > 0] = skin_color[c]
+            img[:,:,c] = channel
         
-        pupil_size = int(eye_size * 0.4)
-        cv2.circle(img, (left_eye_x, eye_y), pupil_size, (0, 0, 0), -1)
-        cv2.circle(img, (right_eye_x, eye_y), pupil_size, (0, 0, 0), -1)
+        # 添加纹理
+        img = cv2.addWeighted(img, 0.7, cv2.cvtColor(cv2.merge([texture]*3), cv2.COLOR_GRAY2BGR), 0.3, 0)
         
-        # 鼻子
-        nose_y = face_center_y + int(face_size * 0.1)
-        nose_size = int(face_size * 0.15)
-        cv2.ellipse(img, (face_center_x, nose_y), 
-                   (nose_size, nose_size//2), 0, 0, 360,
-                   (200, 150, 100), -1)
-        
-        # 嘴巴
-        mouth_y = face_center_y + int(face_size * 0.35)
-        mouth_width = int(face_size * 0.4)
-        mouth_height = int(face_size * 0.15)
-        
-        smile_curve = (gene[12] + 1) / 2
-        start_angle = 180
-        end_angle = 360 - int(180 * smile_curve)
-        
-        cv2.ellipse(img, (face_center_x, mouth_y), 
-                   (mouth_width//2, mouth_height//2), 0, 
-                   start_angle, end_angle, (100, 50, 50), -1)
+        # 高斯模糊使图像平滑
+        img = cv2.GaussianBlur(img, (3, 3), 1)
         
         return img
