@@ -2,20 +2,8 @@
   "id": 8,
   "generation": 1,
   "parents": [
-    "c1b881abac8427d9435e8789c8b791c8",
-    "96772fb591ba0f4182ddb8707c2a1b0c"
+    "5aa3333b5428ea93ca092fbdc3afbe91",
+    "5ad3730781bce4d24f177e1b3ab98c3e"
   ],
-  "mutation_applied": false,
-  "features": [
-    9.1876195225784e-05,
-    7.243781037267607e-05,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    8.514939823694073e-07
-  ]
+  "mutation": false
 }
