@@ -18,6 +18,7 @@ on:
           - '20'
           - '30'
           - '50'
+          - '100'
       format:
         description: '图片格式'
         required: false
