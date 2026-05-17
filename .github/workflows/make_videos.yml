@@ -1,0 +1,208 @@
+# HunyuanVideo 1.5 CPU Inference Workflow
+# 适用于高性能CPU的文本生成视频工作流
+# 注意：生成速度较慢（5-10秒视频可能需要5-20分钟）
+
+name: HunyuanVideo-1.5-CPU-Inference
+description: 纯CPU运行的HunyuanVideo 1.5文本生成视频工作流
+version: "1.0"
+
+# 环境配置
+environment:
+  python_version: "3.10+"
+  pytorch: "2.0.0+"
+  memory_required: "32GB RAM (推荐64GB)"
+  cpu_cores: 8+
+  
+  dependencies:
+    - torch>=2.0.0
+    - diffusers>=0.27.0
+    - transformers>=4.35.0
+    - accelerate>=0.25.0
+    - sentencepiece
+    - protobuf
+    - opencv-python
+    - imageio
+    - imageio-ffmpeg
+
+# 模型配置
+models:
+  hunyuan_video:
+    name: "HunyuanVideo/ HunyuanVideo-1.5"
+    source: "https://huggingface.co/Tencent-Hunyuan/HunyuanVideo-1.5"
+    variant: "fp16"  # 使用fp16版本减小内存占用
+    cache_dir: "./models/hunyuan_video"
+    
+  text_encoder:
+    name: "Qwen/Qwen2.5-VL-7B-Instruct"
+    source: "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
+
+# 推理参数
+inference_params:
+  # 视频输出配置
+  output:
+    fps: 24
+    width: 720
+    height: 480  # 降低分辨率适配CPU推理
+    num_frames: 49  # 约2秒视频
+    num_inference_steps: 20
+    guidance_scale: 6.0
+    
+  # CPU优化配置
+  cpu_optimization:
+    device: "cpu"
+    torch_dtype: "float32"  # CPU上fp32通常比fp16更快
+    enable_cpu_offload: true
+    offload_state_dict: true
+    
+  # 采样参数
+  sampling:
+    seed: 42  # 设为null则随机
+    scheduler: "DDIMScheduler"
+    eta: 0.0
+
+# 工作流步骤
+workflow:
+  steps:
+    - id: setup
+      name: "初始化环境"
+      type: "setup"
+      command: |
+        import os
+        import torch
+        from diffusers import HunyuanVideoPipeline, DDIMScheduler
+        from diffusers.utils import export_to_video
+        
+    - id: load_model
+      name: "加载模型（CPU模式）"
+      type: "model_loading"
+      command: |
+        print("正在加载HunyuanVideo 1.5模型...")
+        print("注意：首次运行会下载模型文件（~16GB），请耐心等待")
+        
+        # 加载调度器
+        scheduler = DDIMScheduler.from_pretrained(
+            "Tencent-Hunyuan/HunyuanVideo-1.5",
+            subfolder="scheduler",
+            torch_dtype=torch.float32
+        )
+        
+        # 加载Pipeline并强制使用CPU
+        pipe = HunyuanVideoPipeline.from_pretrained(
+            "Tencent-Hunyuan/HunyuanVideo-1.5",
+            scheduler=scheduler,
+            torch_dtype=torch.float32,
+            device_map="cpu"
+        )
+        
+        # 启用CPU offload以节省内存
+        pipe.enable_model_cpu_offload()
+        
+        print("模型加载完成！")
+        
+    - id: generate
+      name: "生成视频"
+      type: "generation"
+      inputs:
+        prompt: "A cinematic shot of a futuristic city at sunset, with flying cars moving through neon-lit streets, 4k, high quality"
+        negative_prompt: "low quality, blurry, distorted, ugly, bad anatomy"
+      command: |
+        prompt = "{prompt}"
+        negative_prompt = "{negative_prompt}"
+        
+        print(f"正在生成视频...")
+        print(f"提示词: {prompt}")
+        print("预计耗时: 5-20分钟（取决于CPU性能）")
+        
+        # 生成视频
+        video_frames = pipe(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=49,
+            width=720,
+            height=480,
+            num_inference_steps=20,
+            guidance_scale=6.0,
+            generator=torch.Generator(device="cpu").manual_seed(42),
+        ).frames[0]
+        
+        print(f"生成完成！共{len(video_frames)}帧")
+        
+    - id: save
+      name: "保存视频"
+      type: "output"
+      command: |
+        output_path = "./output/hunyuan_video_cpu_{seed}.mp4"
+        export_to_video(video_frames, output_path, fps=24)
+        print(f"视频已保存至: {output_path}")
+
+# 使用说明
+usage_guide:
+  quick_start: |
+    1. 确保已安装Python 3.10+和PyTorch CPU版本
+       pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+       pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg
+    
+    2. 将上述YAML保存为 hunyuan_cpu_workflow.yaml
+    
+    3. 运行脚本（需配合执行器，见下方Python脚本）
+    
+    4. 首次运行会自动从HuggingFace下载模型（约16GB），请确保网络通畅
+    
+    5. 生成的视频保存在 ./output/ 目录下
+
+  python_runner: |
+    # 将此Python脚本与YAML文件放在同一目录下运行
+    import yaml
+    import torch
+    from diffusers import HunyuanVideoPipeline, DDIMScheduler
+    from diffusers.utils import export_to_video
+    
+    # 加载配置
+    with open("hunyuan_cpu_workflow.yaml", "r") as f:
+        config = yaml.safe_load(f)
+    
+    # 自定义提示词
+    prompt = input("请输入视频描述（直接回车使用默认）: ").strip()
+    if not prompt:
+        prompt = "A beautiful sunset over the ocean, waves gently crashing, cinematic, 4k"
+    
+    # 加载模型
+    print("正在加载模型...")
+    scheduler = DDIMScheduler.from_pretrained(
+        "Tencent-Hunyuan/HunyuanVideo-1.5",
+        subfolder="scheduler",
+        torch_dtype=torch.float32
+    )
+    
+    pipe = HunyuanVideoPipeline.from_pretrained(
+        "Tencent-Hunyuan/HunyuanVideo-1.5",
+        scheduler=scheduler,
+        torch_dtype=torch.float32,
+    )
+    pipe.to("cpu")
+    pipe.enable_model_cpu_offload()
+    
+    # 生成视频
+    print(f"提示词: {prompt}")
+    print("生成中...（可能需要5-20分钟）")
+    
+    video_frames = pipe(
+        prompt=prompt,
+        num_frames=49,
+        width=720,
+        height=480,
+        num_inference_steps=20,
+        guidance_scale=6.0,
+    ).frames[0]
+    
+    # 保存
+    output_path = "./output/hunyuan_cpu_output.mp4"
+    export_to_video(video_frames, output_path, fps=24)
+    print(f"完成！视频保存至: {output_path}")
+
+# 性能说明
+performance_notes:
+  - "纯CPU推理速度较慢，49帧(约2秒)视频预计需要5-20分钟"
+  - "如需更长视频，可将num_frames增加至97(约4秒)，但耗时翻倍"
+  - "建议降低分辨率至480p以下以获得更快速度"
+  - "如果内存不足(32GB以下)，可尝试设置enable_attention_slicing()"
