@@ -1,208 +1,375 @@
-# HunyuanVideo 1.5 CPU Inference Workflow
-# 适用于高性能CPU的文本生成视频工作流
-# 注意：生成速度较慢（5-10秒视频可能需要5-20分钟）
+# HunyuanVideo 1.5 CPU Inference Workflow with GitHub Actions Support
+# 支持手动触发和GitHub集成的纯CPU视频生成工作流
 
-name: HunyuanVideo-1.5-CPU-Inference
-description: 纯CPU运行的HunyuanVideo 1.5文本生成视频工作流
-version: "1.0"
+name: HunyuanVideo-1.5-CPU-Generator
+description: 手动触发的HunyuanVideo 1.5文本生成视频工作流（纯CPU版本）
+version: "2.0"
 
-# 环境配置
-environment:
-  python_version: "3.10+"
-  pytorch: "2.0.0+"
-  memory_required: "32GB RAM (推荐64GB)"
-  cpu_cores: 8+
-  
-  dependencies:
-    - torch>=2.0.0
-    - diffusers>=0.27.0
-    - transformers>=4.35.0
-    - accelerate>=0.25.0
-    - sentencepiece
-    - protobuf
-    - opencv-python
-    - imageio
-    - imageio-ffmpeg
-
-# 模型配置
-models:
-  hunyuan_video:
-    name: "HunyuanVideo/ HunyuanVideo-1.5"
-    source: "https://huggingface.co/Tencent-Hunyuan/HunyuanVideo-1.5"
-    variant: "fp16"  # 使用fp16版本减小内存占用
-    cache_dir: "./models/hunyuan_video"
-    
-  text_encoder:
-    name: "Qwen/Qwen2.5-VL-7B-Instruct"
-    source: "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
-
-# 推理参数
-inference_params:
-  # 视频输出配置
-  output:
-    fps: 24
-    width: 720
-    height: 480  # 降低分辨率适配CPU推理
-    num_frames: 49  # 约2秒视频
-    num_inference_steps: 20
-    guidance_scale: 6.0
-    
-  # CPU优化配置
-  cpu_optimization:
-    device: "cpu"
-    torch_dtype: "float32"  # CPU上fp32通常比fp16更快
-    enable_cpu_offload: true
-    offload_state_dict: true
-    
-  # 采样参数
-  sampling:
-    seed: 42  # 设为null则随机
-    scheduler: "DDIMScheduler"
-    eta: 0.0
-
-# 工作流步骤
-workflow:
-  steps:
-    - id: setup
-      name: "初始化环境"
-      type: "setup"
-      command: |
-        import os
-        import torch
-        from diffusers import HunyuanVideoPipeline, DDIMScheduler
-        from diffusers.utils import export_to_video
-        
-    - id: load_model
-      name: "加载模型（CPU模式）"
-      type: "model_loading"
-      command: |
-        print("正在加载HunyuanVideo 1.5模型...")
-        print("注意：首次运行会下载模型文件（~16GB），请耐心等待")
-        
-        # 加载调度器
-        scheduler = DDIMScheduler.from_pretrained(
-            "Tencent-Hunyuan/HunyuanVideo-1.5",
-            subfolder="scheduler",
-            torch_dtype=torch.float32
-        )
-        
-        # 加载Pipeline并强制使用CPU
-        pipe = HunyuanVideoPipeline.from_pretrained(
-            "Tencent-Hunyuan/HunyuanVideo-1.5",
-            scheduler=scheduler,
-            torch_dtype=torch.float32,
-            device_map="cpu"
-        )
-        
-        # 启用CPU offload以节省内存
-        pipe.enable_model_cpu_offload()
-        
-        print("模型加载完成！")
-        
-    - id: generate
-      name: "生成视频"
-      type: "generation"
+# GitHub Actions 工作流配置
+github_actions:
+  on:
+    workflow_dispatch:  # 手动触发
       inputs:
-        prompt: "A cinematic shot of a futuristic city at sunset, with flying cars moving through neon-lit streets, 4k, high quality"
-        negative_prompt: "low quality, blurry, distorted, ugly, bad anatomy"
-      command: |
-        prompt = "{prompt}"
-        negative_prompt = "{negative_prompt}"
+        prompt:
+          description: "视频描述提示词"
+          required: true
+          type: string
+          default: "A cinematic shot of a futuristic city at sunset, with flying cars moving through neon-lit streets, 4k, high quality"
         
-        print(f"正在生成视频...")
-        print(f"提示词: {prompt}")
-        print("预计耗时: 5-20分钟（取决于CPU性能）")
+        negative_prompt:
+          description: "负面提示词（不需要的内容）"
+          required: false
+          type: string
+          default: "low quality, blurry, distorted, ugly, bad anatomy, watermark"
         
-        # 生成视频
-        video_frames = pipe(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=49,
-            width=720,
-            height=480,
-            num_inference_steps=20,
-            guidance_scale=6.0,
-            generator=torch.Generator(device="cpu").manual_seed(42),
-        ).frames[0]
+        num_frames:
+          description: "视频帧数（49帧≈2秒，97帧≈4秒）"
+          required: false
+          type: number
+          default: 49
         
-        print(f"生成完成！共{len(video_frames)}帧")
+        width:
+          description: "视频宽度（建议480或720）"
+          required: false
+          type: number
+          default: 720
         
-    - id: save
-      name: "保存视频"
-      type: "output"
-      command: |
-        output_path = "./output/hunyuan_video_cpu_{seed}.mp4"
-        export_to_video(video_frames, output_path, fps=24)
-        print(f"视频已保存至: {output_path}")
+        height:
+          description: "视频高度（建议320或480）"
+          required: false
+          type: number
+          default: 480
+        
+        inference_steps:
+          description: "推理步数（20-30质量较好）"
+          required: false
+          type: number
+          default: 20
+        
+        guidance_scale:
+          description: "引导系数（6-8效果较好）"
+          required: false
+          type: number
+          default: 6.0
+        
+        seed:
+          description: "随机种子（留空则随机）"
+          required: false
+          type: number
+          default: 42
+    
+    push:
+      branches: [ main, master ]
+      paths:
+        - 'workflows/**/*.yml'
+        - 'prompts/**/*.txt'
 
-# 使用说明
-usage_guide:
-  quick_start: |
-    1. 确保已安装Python 3.10+和PyTorch CPU版本
-       pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-       pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg
-    
-    2. 将上述YAML保存为 hunyuan_cpu_workflow.yaml
-    
-    3. 运行脚本（需配合执行器，见下方Python脚本）
-    
-    4. 首次运行会自动从HuggingFace下载模型（约16GB），请确保网络通畅
-    
-    5. 生成的视频保存在 ./output/ 目录下
+  jobs:
+    generate-video:
+      runs-on: ubuntu-latest
+      timeout-minutes: 60  # CPU推理预留充足时间
+      
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          
+        - name: Setup Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.10'
+            
+        - name: Install dependencies
+          run: |
+            pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+            pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg pyyaml
+            pip install huggingface_hub
+            
+        - name: Create output directory
+          run: mkdir -p ./output
+          
+        - name: Generate video
+          env:
+            PROMPT: ${{ github.event.inputs.prompt }}
+            NEGATIVE_PROMPT: ${{ github.event.inputs.negative_prompt }}
+            NUM_FRAMES: ${{ github.event.inputs.num_frames }}
+            WIDTH: ${{ github.event.inputs.width }}
+            HEIGHT: ${{ github.event.inputs.height }}
+            INFERENCE_STEPS: ${{ github.event.inputs.inference_steps }}
+            GUIDANCE_SCALE: ${{ github.event.inputs.guidance_scale }}
+            SEED: ${{ github.event.inputs.seed }}
+          run: |
+            python hunyuan_generator.py
+            
+        - name: Upload video artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: generated-video
+            path: ./output/*.mp4
+            retention-days: 7
+            
+        - name: Create release
+          if: github.event_name == 'workflow_dispatch'
+          uses: softprops/action-gh-release@v1
+          with:
+            tag_name: video-${{ github.run_id }}
+            name: Generated Video ${{ github.run_id }}
+            files: ./output/*.mp4
 
-  python_runner: |
-    # 将此Python脚本与YAML文件放在同一目录下运行
-    import yaml
-    import torch
-    from diffusers import HunyuanVideoPipeline, DDIMScheduler
-    from diffusers.utils import export_to_video
+# 本地运行配置
+local_execution:
+  interactive_mode: true
+  config_file: "./video_config.yaml"
+  
+  setup_commands: |
+    # 创建虚拟环境
+    python -m venv venv
+    source venv/bin/activate  # Linux/Mac
+    # venv\Scripts\activate  # Windows
     
-    # 加载配置
-    with open("hunyuan_cpu_workflow.yaml", "r") as f:
-        config = yaml.safe_load(f)
+    # 安装依赖
+    pip install --upgrade pip
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg pyyaml
     
-    # 自定义提示词
-    prompt = input("请输入视频描述（直接回车使用默认）: ").strip()
-    if not prompt:
-        prompt = "A beautiful sunset over the ocean, waves gently crashing, cinematic, 4k"
-    
-    # 加载模型
-    print("正在加载模型...")
-    scheduler = DDIMScheduler.from_pretrained(
-        "Tencent-Hunyuan/HunyuanVideo-1.5",
-        subfolder="scheduler",
-        torch_dtype=torch.float32
-    )
-    
-    pipe = HunyuanVideoPipeline.from_pretrained(
-        "Tencent-Hunyuan/HunyuanVideo-1.5",
-        scheduler=scheduler,
-        torch_dtype=torch.float32,
-    )
-    pipe.to("cpu")
-    pipe.enable_model_cpu_offload()
-    
-    # 生成视频
-    print(f"提示词: {prompt}")
-    print("生成中...（可能需要5-20分钟）")
-    
-    video_frames = pipe(
-        prompt=prompt,
-        num_frames=49,
-        width=720,
-        height=480,
-        num_inference_steps=20,
-        guidance_scale=6.0,
-    ).frames[0]
-    
-    # 保存
-    output_path = "./output/hunyuan_cpu_output.mp4"
-    export_to_video(video_frames, output_path, fps=24)
-    print(f"完成！视频保存至: {output_path}")
+    # 创建输出目录
+    mkdir -p ./output ./models
 
-# 性能说明
-performance_notes:
-  - "纯CPU推理速度较慢，49帧(约2秒)视频预计需要5-20分钟"
-  - "如需更长视频，可将num_frames增加至97(约4秒)，但耗时翻倍"
-  - "建议降低分辨率至480p以下以获得更快速度"
-  - "如果内存不足(32GB以下)，可尝试设置enable_attention_slicing()"
+# 核心生成脚本（保存为 hunyuan_generator.py）
+generator_script: |
+  #!/usr/bin/env python3
+  """
+  HunyuanVideo 1.5 CPU视频生成器
+  支持环境变量和配置文件两种方式
+  """
+  
+  import os
+  import yaml
+  import torch
+  import argparse
+  from pathlib import Path
+  from datetime import datetime
+  from diffusers import HunyuanVideoPipeline, DDIMScheduler
+  from diffusers.utils import export_to_video
+  
+  def load_config():
+      """加载配置（优先级：环境变量 > 配置文件 > 默认值）"""
+      config = {
+          'prompt': os.getenv('PROMPT', 'A beautiful sunset over the ocean, waves gently crashing, cinematic, 4k'),
+          'negative_prompt': os.getenv('NEGATIVE_PROMPT', 'low quality, blurry, distorted, ugly, bad anatomy'),
+          'num_frames': int(os.getenv('NUM_FRAMES', 49)),
+          'width': int(os.getenv('WIDTH', 720)),
+          'height': int(os.getenv('HEIGHT', 480)),
+          'inference_steps': int(os.getenv('INFERENCE_STEPS', 20)),
+          'guidance_scale': float(os.getenv('GUIDANCE_SCALE', 6.0)),
+          'seed': int(os.getenv('SEED', 42)) if os.getenv('SEED') and os.getenv('SEED') != '' else None,
+          'model_cache': os.getenv('MODEL_CACHE', './models/hunyuan_video'),
+          'output_dir': os.getenv('OUTPUT_DIR', './output')
+      }
+      
+      # 如果存在配置文件，则合并
+      if os.path.exists('video_config.yaml'):
+          with open('video_config.yaml', 'r') as f:
+              file_config = yaml.safe_load(f)
+              if file_config:
+                  config.update(file_config)
+                  
+      return config
+  
+  def interactive_input():
+      """交互式输入模式"""
+      print("\n" + "="*50)
+      print("HunyuanVideo 1.5 CPU视频生成器")
+      print("="*50)
+      
+      prompt = input("\n请输入视频描述（直接回车使用默认）:\n> ").strip()
+      if not prompt:
+          prompt = "A cinematic shot of a futuristic city at sunset, with flying cars moving through neon-lit streets, 4k, high quality"
+      
+      negative_prompt = input("\n请输入负面提示词（不需要的内容，直接回车跳过）:\n> ").strip()
+      if not negative_prompt:
+          negative_prompt = "low quality, blurry, distorted, ugly, bad anatomy"
+      
+      print("\n高级设置（直接回车使用默认）:")
+      num_frames = input(f"视频帧数 [49] (49≈2秒，97≈4秒): ").strip()
+      num_frames = int(num_frames) if num_frames else 49
+      
+      width = input(f"视频宽度 [720]: ").strip()
+      width = int(width) if width else 720
+      
+      height = input(f"视频高度 [480]: ").strip()
+      height = int(height) if height else 480
+      
+      return {
+          'prompt': prompt,
+          'negative_prompt': negative_prompt,
+          'num_frames': num_frames,
+          'width': width,
+          'height': height,
+          'inference_steps': 20,
+          'guidance_scale': 6.0,
+          'seed': 42
+      }
+  
+  def generate_video(config):
+      """生成视频"""
+      print("\n" + "="*50)
+      print("开始生成视频...")
+      print("="*50)
+      print(f"提示词: {config['prompt']}")
+      print(f"分辨率: {config['width']}x{config['height']}")
+      print(f"帧数: {config['num_frames']} (约{config['num_frames']/24:.1f}秒)")
+      print(f"推理步数: {config['inference_steps']}")
+      print(f"预计耗时: {config['num_frames']/24*3:.1f}-{config['num_frames']/24*10:.1f}分钟")
+      print("-"*50)
+      
+      # 确保输出目录存在
+      Path(config['output_dir']).mkdir(parents=True, exist_ok=True)
+      
+      # 加载调度器
+      print("📦 加载调度器...")
+      scheduler = DDIMScheduler.from_pretrained(
+          "Tencent-Hunyuan/HunyuanVideo-1.5",
+          subfolder="scheduler",
+          cache_dir=config['model_cache'],
+          torch_dtype=torch.float32
+      )
+      
+      # 加载Pipeline
+      print("🎬 加载模型（首次运行会下载约16GB文件）...")
+      pipe = HunyuanVideoPipeline.from_pretrained(
+          "Tencent-Hunyuan/HunyuanVideo-1.5",
+          scheduler=scheduler,
+          torch_dtype=torch.float32,
+          cache_dir=config['model_cache'],
+      )
+      
+      # CPU优化
+      print("⚙️ 配置CPU推理模式...")
+      pipe.to("cpu")
+      pipe.enable_model_cpu_offload()
+      
+      # 设置随机种子
+      if config['seed']:
+          generator = torch.Generator(device="cpu").manual_seed(config['seed'])
+      else:
+          generator = None
+      
+      # 生成视频
+      print("🎥 生成中...（请耐心等待）")
+      import time
+      start_time = time.time()
+      
+      try:
+          output = pipe(
+              prompt=config['prompt'],
+              negative_prompt=config['negative_prompt'],
+              num_frames=config['num_frames'],
+              width=config['width'],
+              height=config['height'],
+              num_inference_steps=config['inference_steps'],
+              guidance_scale=config['guidance_scale'],
+              generator=generator,
+          )
+          
+          video_frames = output.frames[0]
+          elapsed = time.time() - start_time
+          
+          print(f"✅ 生成完成！用时: {elapsed/60:.1f}分钟")
+          
+          # 保存视频
+          timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+          seed_str = f"_seed{config['seed']}" if config['seed'] else ""
+          output_path = Path(config['output_dir']) / f"hunyuan_video_{timestamp}{seed_str}.mp4"
+          
+          export_to_video(video_frames, str(output_path), fps=24)
+          print(f"💾 视频已保存: {output_path}")
+          
+          return str(output_path)
+          
+      except Exception as e:
+          print(f"❌ 生成失败: {e}")
+          raise
+  
+  def main():
+      parser = argparse.ArgumentParser(description='HunyuanVideo 1.5 CPU视频生成器')
+      parser.add_argument('--config', '-c', type=str, help='配置文件路径')
+      parser.add_argument('--interactive', '-i', action='store_true', help='交互式模式')
+      parser.add_argument('--prompt', '-p', type=str, help='视频提示词')
+      
+      args = parser.parse_args()
+      
+      # 加载配置
+      if args.config:
+          with open(args.config, 'r') as f:
+              config = yaml.safe_load(f)
+      elif args.interactive:
+          config = interactive_input()
+      elif args.prompt:
+          config = load_config()
+          config['prompt'] = args.prompt
+      else:
+          config = load_config()
+          if config['prompt'] == "A beautiful sunset over the ocean...":
+              # 默认配置时触发交互模式
+              config = interactive_input()
+      
+      # 生成视频
+      generate_video(config)
+  
+  if __name__ == "__main__":
+      main()
+
+# 配置文件示例（保存为 video_config.yaml）
+config_example: |
+  # HunyuanVideo 1.5 配置文件
+  # 将此文件放在工作流根目录
+  
+  # 必填项
+  prompt: "A beautiful sunset over the ocean, waves gently crashing, cinematic, 4k"
+  
+  # 可选项
+  negative_prompt: "low quality, blurry, distorted, ugly, bad anatomy"
+  num_frames: 49  # 49帧≈2秒，97帧≈4秒
+  width: 720
+  height: 480
+  inference_steps: 20
+  guidance_scale: 6.0
+  seed: 42  # 设置为null则随机
+  model_cache: "./models/hunyuan_video"
+  output_dir: "./output"
+
+# 快速开始指南
+quick_start:
+  github_actions: |
+    1. 将上述YAML保存为 .github/workflows/hunyuan_video_generator.yml
+    2. 将hunyuan_generator.py脚本放在项目根目录
+    3. 推送到GitHub仓库
+    4. 在GitHub Actions页面点击"Run workflow"手动触发
+    5. 填写视频提示词等参数
+    6. 等待生成完成后下载视频artifact
+  
+  local_interactive: |
+    # 交互式模式（推荐）
+    python hunyuan_generator.py --interactive
+    
+    # 使用命令行参数
+    python hunyuan_generator.py --prompt "A cat playing in a garden, sunny day, 4k"
+    
+    # 使用配置文件
+    python hunyuan_generator.py --config video_config.yaml
+
+  docker_support: |
+    # 可选：使用Docker容器运行
+    docker run --rm -v $(pwd):/workspace -w /workspace \
+      python:3.10-slim bash -c "
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
+        pip install diffusers transformers accelerate && \
+        python hunyuan_generator.py --interactive
+      "
+
+# 性能建议
+performance_tips:
+  - "GitHub Actions免费额度：Ubuntu 2核心CPU，建议控制生成时间在60分钟内"
+  - "本地CPU推理建议使用48GB以上内存获得更流畅体验"
+  - "可修改num_frames=25生成约1秒短视频用于测试"
+  - "分辨率降低到480x320可显著提升速度"
