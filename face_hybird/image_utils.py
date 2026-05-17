@@ -2,14 +2,14 @@
 图像处理工具函数
 """
 import os
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 import numpy as np
 
 
 def save_image(image, filepath, format='PNG'):
     """保存图像"""
     if isinstance(image, np.ndarray):
-        # 转换 numpy array 到 PIL Image
+        # 转换 numpy array 到 PIL Image (BGR to RGB)
         if len(image.shape) == 3:
             image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         else:
@@ -20,15 +20,7 @@ def save_image(image, filepath, format='PNG'):
 
 
 def create_collage(image_paths, output_path, cols=5, thumb_size=(128, 128)):
-    """
-    创建图片拼接图
-    
-    Args:
-        image_paths: 图片路径列表
-        output_path: 输出路径
-        cols: 列数
-        thumb_size: 缩略图尺寸
-    """
+    """创建图片拼接图"""
     if not image_paths:
         return
     
@@ -62,26 +54,5 @@ def create_collage(image_paths, output_path, cols=5, thumb_size=(128, 128)):
     print(f"✅ 拼接图已保存: {output_path}")
 
 
-def add_text_to_image(image, text, position='bottom'):
-    """给图片添加文字标注"""
-    if isinstance(image, np.ndarray):
-        image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    
-    draw = ImageDraw.Draw(image)
-    
-    # 使用默认字体
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 20)
-    except:
-        font = ImageFont.load_default()
-    
-    if position == 'bottom':
-        y = image.height - 30
-        x = 10
-    else:
-        y = 10
-        x = 10
-    
-    draw.text((x, y), text, fill=(255, 255, 255), font=font)
-    
-    return image
+# 导入 cv2 用于颜色转换
+import cv2
