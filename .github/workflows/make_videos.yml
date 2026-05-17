@@ -40,13 +40,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg huggingface_hub
-      
-      - name: Login to Hugging Face
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          python3 -c "from huggingface_hub import login; login(token='$HF_TOKEN')"
+          pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg
       
       - name: Generate video
         env:
@@ -58,7 +52,7 @@ jobs:
         run: |
           python3 << 'EOF'
           import os, torch
-          from diffusers import HunyuanVideoPipeline, DDIMScheduler
+          from diffusers import HunyuanVideoPipeline
           from diffusers.utils import export_to_video
           from datetime import datetime
           
@@ -70,9 +64,9 @@ jobs:
           print(f"Resolution: {w}x{h}")
           print(f"Frames: {os.environ['FRAMES']}")
           
+          # 正确用法：不需要单独加载 scheduler
           pipe = HunyuanVideoPipeline.from_pretrained(
               "Tencent-Hunyuan/HunyuanVideo",
-              scheduler=DDIMScheduler.from_pretrained("Tencent-Hunyuan/HunyuanVideo", subfolder="scheduler"),
               torch_dtype=torch.float32
           )
           pipe.to("cpu")
