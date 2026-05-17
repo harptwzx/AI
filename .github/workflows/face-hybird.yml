@@ -41,7 +41,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
-          pip install opencv-python-headless numpy pillow requests scipy
+          pip install opencv-python-headless numpy pillow requests scipy scikit-image
 
       - name: 运行人脸杂交
         run: |
@@ -56,7 +56,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 只添加存在的目录
           for dir in hybrid_results extracted_faces source_images; do
             if [ -d "$dir" ]; then
               git add "$dir/"
@@ -64,7 +63,6 @@ jobs:
             fi
           done
           
-          # 检查并提交
           if git diff --staged --quiet; then
             echo "没有新文件需要提交"
           else
