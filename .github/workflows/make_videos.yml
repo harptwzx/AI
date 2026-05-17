@@ -1,4 +1,4 @@
-name: Video Generator (Open Model)
+name: Video Generator (Text-to-Video)
 
 on:
   workflow_dispatch:
@@ -12,14 +12,14 @@ on:
         description: '负面提示词'
         required: false
         type: string
-        default: 'low quality, blurry'
+        default: 'low quality, blurry, distorted, ugly'
       num_frames:
-        description: '帧数'
+        description: '帧数(24/32/48/64)'
         required: false
         type: string
-        default: '49'
+        default: '32'
       resolution:
-        description: '分辨率'
+        description: '分辨率(256x256/384x384/512x512)'
         required: false
         type: string
         default: '256x256'
@@ -42,7 +42,7 @@ jobs:
         run: |
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install diffusers transformers accelerate sentencepiece opencv-python imageio imageio-ffmpeg
-          pip install modelscope av
+          pip install av
       
       - name: Generate video
         env:
@@ -61,24 +61,31 @@ jobs:
           
           res = os.environ['RES']
           w, h = map(int, res.split('x'))
+          num_frames = int(os.environ['FRAMES'])
           
-          print(f"Generating video with prompt: {os.environ['PROMPT']}")
-          print(f"Resolution: {w}x{h}")
-          print(f"Frames: {os.environ['FRAMES']}")
+          print(f"🎬 Generating video with prompt: {os.environ['PROMPT']}")
+          print(f"📐 Resolution: {w}x{h}")
+          print(f"🎞️  Frames: {num_frames}")
+          print(f"🎲 Seed: {os.environ['SEED']}")
           
-          # 使用 Modelscope 的公开模型
+          # 加载模型
           pipe = DiffusionPipeline.from_pretrained(
               "damo-vilab/text-to-video-ms-1.7b",
               torch_dtype=torch.float32
           )
-          pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-          pipe.to("cpu")
-          pipe.enable_model_cpu_offload()
           
+          # 使用 DPMSolver 加速
+          pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+          
+          # 移动到 CPU（不使用 cpu_offload 避免错误）
+          pipe.to("cpu")
+          
+          # 生成视频
+          print("⏳ Generating video frames...")
           video_frames = pipe(
               prompt=os.environ['PROMPT'],
               negative_prompt=os.environ['NEG_PROMPT'],
-              num_frames=int(os.environ['FRAMES']),
+              num_frames=num_frames,
               height=h,
               width=w,
               num_inference_steps=25,
@@ -86,13 +93,27 @@ jobs:
               generator=torch.Generator("cpu").manual_seed(int(os.environ['SEED']))
           ).frames[0]
           
+          # 保存视频
           path = f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
           export_to_video(video_frames, path, fps=8)
-          print(f"✅ Saved: {path}")
+          
+          print(f"✅ Video saved: {path}")
+          print(f"📊 Total frames: {len(video_frames)}")
           EOF
       
-      - name: Upload video
+      - name: Upload video artifact
         uses: actions/upload-artifact@v4
         with:
-          name: video
+          name: generated-video
           path: output_*.mp4
+          retention-days: 7
+      
+      - name: Display result
+        run: |
+          echo "## 🎥 视频生成完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**提示词:** ${{ github.event.inputs.prompt }}" >> $GITHUB_STEP_SUMMARY
+          echo "**分辨率:** ${{ github.event.inputs.resolution }}" >> $GITHUB_STEP_SUMMARY
+          echo "**帧数:** ${{ github.event.inputs.num_frames }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📁 视频文件已保存为 artifact，可在上方下载" >> $GITHUB_STEP_SUMMARY
