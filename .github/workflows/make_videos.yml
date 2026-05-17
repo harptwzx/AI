@@ -1,4 +1,4 @@
-name: HunyuanVideo Generator
+name: Video Generator (Open Model)
 
 on:
   workflow_dispatch:
@@ -7,21 +7,22 @@ on:
         description: '视频描述'
         required: true
         type: string
+        default: 'a cat playing with a ball'
       negative_prompt:
         description: '负面提示词'
         required: false
         type: string
         default: 'low quality, blurry'
       num_frames:
-        description: '帧数(25/49/73/97)'
+        description: '帧数'
         required: false
         type: string
         default: '49'
       resolution:
-        description: '分辨率(720x480/640x360/480x320)'
+        description: '分辨率'
         required: false
         type: string
-        default: '720x480'
+        default: '256x256'
       seed:
         description: '随机种子'
         required: false
@@ -40,7 +41,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install diffusers transformers accelerate sentencepiece protobuf opencv-python imageio imageio-ffmpeg
+          pip install diffusers transformers accelerate sentencepiece opencv-python imageio imageio-ffmpeg
+          pip install modelscope av
       
       - name: Generate video
         env:
@@ -51,12 +53,12 @@ jobs:
           SEED: ${{ github.event.inputs.seed }}
         run: |
           python3 << 'EOF'
-          import os, torch
-          from diffusers import HunyuanVideoPipeline
+          import os
+          import torch
+          from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
           from diffusers.utils import export_to_video
           from datetime import datetime
           
-          # 解析分辨率
           res = os.environ['RES']
           w, h = map(int, res.split('x'))
           
@@ -64,28 +66,29 @@ jobs:
           print(f"Resolution: {w}x{h}")
           print(f"Frames: {os.environ['FRAMES']}")
           
-          # 正确用法：不需要单独加载 scheduler
-          pipe = HunyuanVideoPipeline.from_pretrained(
-              "Tencent-Hunyuan/HunyuanVideo",
+          # 使用 Modelscope 的公开模型
+          pipe = DiffusionPipeline.from_pretrained(
+              "damo-vilab/text-to-video-ms-1.7b",
               torch_dtype=torch.float32
           )
+          pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
           pipe.to("cpu")
           pipe.enable_model_cpu_offload()
           
-          frames = pipe(
+          video_frames = pipe(
               prompt=os.environ['PROMPT'],
               negative_prompt=os.environ['NEG_PROMPT'],
               num_frames=int(os.environ['FRAMES']),
-              width=w,
               height=h,
-              num_inference_steps=20,
-              guidance_scale=6.0,
+              width=w,
+              num_inference_steps=25,
+              guidance_scale=9.0,
               generator=torch.Generator("cpu").manual_seed(int(os.environ['SEED']))
           ).frames[0]
           
           path = f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
-          export_to_video(frames, path, fps=24)
-          print(f"Saved: {path}")
+          export_to_video(video_frames, path, fps=8)
+          print(f"✅ Saved: {path}")
           EOF
       
       - name: Upload video
