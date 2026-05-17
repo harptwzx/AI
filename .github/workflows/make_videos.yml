@@ -1,4 +1,3 @@
-# .github/workflows/hunyuan_video_generator.yml
 name: HunyuanVideo Generator
 
 on:
@@ -51,15 +50,19 @@ jobs:
           RES: ${{ github.event.inputs.resolution }}
           SEED: ${{ github.event.inputs.seed }}
         run: |
-          IFS='x' read -r W H <<< "$RES"
           python3 << 'EOF'
           import os, torch
           from diffusers import HunyuanVideoPipeline, DDIMScheduler
           from diffusers.utils import export_to_video
           from datetime import datetime
           
-          w = int(os.environ['W'])
-          h = int(os.environ['H'])
+          # 在 Python 内解析分辨率
+          res = os.environ['RES']
+          w, h = map(int, res.split('x'))
+          
+          print(f"Generating video with prompt: {os.environ['PROMPT']}")
+          print(f"Resolution: {w}x{h}")
+          print(f"Frames: {os.environ['FRAMES']}")
           
           pipe = HunyuanVideoPipeline.from_pretrained(
               "Tencent-Hunyuan/HunyuanVideo-1.5",
