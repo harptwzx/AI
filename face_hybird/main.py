@@ -6,6 +6,8 @@ import argparse
 import os
 import json
 import sys
+import cv2
+import numpy as np
 from pathlib import Path
 
 from data_collector import FaceDataCollector
@@ -21,10 +23,8 @@ def parse_args():
     parser.add_argument('--num-hybrids', type=int, default=10, help='生成杂交数量')
     parser.add_argument('--generations', type=int, default=3, help='杂交代数')
     parser.add_argument('--mutation-rate', type=float, default=0.1, help='变异率')
-    parser.add_argument('--source-type', type=str, default='celebrities', 
-                       choices=['celebrities', 'random_people', 'anime', 'diverse'],
-                       help='人脸来源类型')
-    parser.add_argument('--min-face-size', type=int, default=100, help='最小人脸尺寸')
+    parser.add_argument('--source-type', type=str, default='random', help='人脸来源类型')
+    parser.add_argument('--min-face-size', type=int, default=50, help='最小人脸尺寸')
     parser.add_argument('--output-dir', type=str, default='../hybrid_results', help='输出目录')
     parser.add_argument('--output-json', action='store_true', help='输出JSON格式')
     return parser.parse_args()
@@ -40,6 +40,7 @@ def main():
     # 创建输出目录
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs("../extracted_faces", exist_ok=True)
+    os.makedirs("../source_images", exist_ok=True)
     
     result = {
         'success': False,
@@ -51,7 +52,7 @@ def main():
     try:
         # 步骤1: 采集人脸图片
         print("\n📸 步骤 1/5: 采集人脸图片...")
-        collector = FaceDataCollector()
+        collector = FaceDataCollector(cache_dir="../source_images")
         source_images = collector.collect(
             num_images=args.num_sources,
             source_type=args.source_type
@@ -66,9 +67,8 @@ def main():
             face = detector.detect_and_extract(img_path)
             if face is not None:
                 faces.append(face)
-                if len(faces) >= args.num_sources:
-                    break
-            print(f"   进度: {i+1}/{len(source_images)}", end='\r')
+            if (i+1) % 10 == 0:
+                print(f"   进度: {i+1}/{len(source_images)}")
         
         print(f"\n✅ 成功提取 {len(faces)} 个人脸")
         
@@ -115,7 +115,7 @@ def main():
                 'generation': hybrid['generation'],
                 'parents': hybrid['parents'],
                 'mutation_applied': hybrid.get('mutation', False),
-                'features': hybrid['features'][:10]  # 只保存前10个特征
+                'features': hybrid['features'][:10]
             }
             
             meta_file = f"{args.output_dir}/hybrid_{i+1:03d}_meta.json"
@@ -123,8 +123,9 @@ def main():
                 json.dump(metadata, f, indent=2)
         
         # 创建拼接图
-        collage_path = f"{args.output_dir}/all_hybrids_collage.png"
-        create_collage(saved_paths, collage_path, cols=5)
+        if len(saved_paths) > 0:
+            collage_path = f"{args.output_dir}/all_hybrids_collage.png"
+            create_collage(saved_paths, collage_path, cols=5)
         
         # 保存摘要
         summary = f"""
@@ -138,11 +139,9 @@ def main():
 - 生成杂交数量: {len(hybrids)}
 - 杂交代数: {args.generations}
 - 变异率: {args.mutation_rate}
-- 人脸来源: {args.source_type}
 
 输出文件:
 - 杂交人脸: {len(saved_paths)} 张
-- 拼接图: {collage_path}
 - 元数据: {len(saved_paths)} 个JSON文件
 
 所有文件保存在: {args.output_dir}
