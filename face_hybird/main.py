@@ -8,7 +8,6 @@ import json
 import sys
 import cv2
 import numpy as np
-from pathlib import Path
 
 from data_collector import FaceDataCollector
 from face_detector import FaceDetector
@@ -25,7 +24,7 @@ def parse_args():
     parser.add_argument('--mutation-rate', type=float, default=0.1, help='变异率')
     parser.add_argument('--source-type', type=str, default='random', help='人脸来源类型')
     parser.add_argument('--min-face-size', type=int, default=50, help='最小人脸尺寸')
-    parser.add_argument('--output-dir', type=str, default='../hybrid_results', help='输出目录')
+    parser.add_argument('--output-dir', type=str, default='hybrid_results', help='输出目录')
     parser.add_argument('--output-json', action='store_true', help='输出JSON格式')
     return parser.parse_args()
 
@@ -37,10 +36,10 @@ def main():
     print("🎭 人脸杂交生成器")
     print("="*60)
     
-    # 创建输出目录
+    # 创建输出目录（使用相对路径，不要用../）
     os.makedirs(args.output_dir, exist_ok=True)
-    os.makedirs("../extracted_faces", exist_ok=True)
-    os.makedirs("../source_images", exist_ok=True)
+    os.makedirs("extracted_faces", exist_ok=True)
+    os.makedirs("source_images", exist_ok=True)
     
     result = {
         'success': False,
@@ -52,7 +51,7 @@ def main():
     try:
         # 步骤1: 采集人脸图片
         print("\n📸 步骤 1/5: 采集人脸图片...")
-        collector = FaceDataCollector(cache_dir="../source_images")
+        collector = FaceDataCollector(cache_dir="source_images")
         source_images = collector.collect(
             num_images=args.num_sources,
             source_type=args.source_type
