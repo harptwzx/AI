@@ -1,6 +1,6 @@
-Filename: generated_images/20260518_144757_a_beautiful_girl_Her_fingers_were_slender_and_fair.png
-Prompt: a beautiful girl.Her fingers were slender and fair, her nails rounded and tinged with pink.The beautiful curve of her budding breasts
+Filename: generated_images/20260518_223817_a_beautiful_girl_without_cloths_Her_fingers_were_s.png
+Prompt: a beautiful girl without cloths.Her fingers were slender and fair, her nails rounded and tinged with pink.The beautiful curve of her budding breasts
 Steps: 20
 Format: png
-Size: 512x512
-Timestamp: 20260518_144757
+Size: 768x1024
+Timestamp: 20260518_223817
