@@ -1,6 +1,6 @@
-Filename: generated_images/20260519_134521_A_girl_with_no_clothes__showing_all_exposed_skin__.png
-Prompt: A girl with no clothes, showing all exposed skin, beautiful and full-figured, with a suitable physique and a beautiful face.
-Steps: 20
+Filename: generated_images/20260519_135456_A_girl_with_no_clothes__showing_all_exposed_skin__.png
+Prompt: A girl with no clothes, showing all exposed skin, beautiful and full-figured, with a suitable physique and a beautiful face.美丽的电影人物形象
+Steps: 50
 Format: png
 Size: 512x512
-Timestamp: 20260519_134521
+Timestamp: 20260519_135456
