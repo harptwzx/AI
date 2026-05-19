@@ -11,13 +11,13 @@ on:
       steps:
         description: '推理步数'
         required: false
-        default: '4'
+        default: '20'
         type: choice
         options:
-          - '4'
-          - '6'
-          - '8'
-          - '12'
+          - '10'
+          - '20'
+          - '30'
+          - '50'
       format:
         description: '图片格式'
         required: false
@@ -27,13 +27,14 @@ on:
           - 'png'
           - 'jpg'
       size:
-        description: '图片尺寸'
+        description: '图片尺寸（超过512x512会先小图生成再放大）'
         required: false
         default: '512x512'
         type: choice
         options:
           - '512x512'
           - '768x768'
+          - '1024x768'
 
 jobs:
   generate-image:
@@ -64,7 +65,7 @@ jobs:
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install diffusers transformers accelerate pillow
 
-      - name: 生成图片（使用 SD 2.1 支持更大尺寸）
+      - name: 生成图片
         env:
           PROMPT: ${{ github.event.inputs.prompt }}
           STEPS: ${{ github.event.inputs.steps }}
@@ -73,16 +74,17 @@ jobs:
         run: |
           python << 'PYTHON'
           import torch
-          from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+          from diffusers import StableDiffusionPipeline, DDIMScheduler
+          from PIL import Image
           import os
           from datetime import datetime
           import re
 
           prompt = os.environ.get('PROMPT', 'a cute cat')
-          steps = int(os.environ.get('STEPS', '4'))
+          steps = int(os.environ.get('STEPS', '20'))
           img_format = os.environ.get('FORMAT', 'png').lower()
           size_str = os.environ.get('SIZE', '512x512')
-          width, height = map(int, size_str.split('x'))
+          target_width, target_height = map(int, size_str.split('x'))
 
           safe_prompt = re.sub(r'[^a-zA-Z0-9\u4e00-\u9fff]', '_', prompt)[:50]
           timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -92,10 +94,8 @@ jobs:
           filename = f"generated_images/{timestamp}_{safe_prompt}.{ext}"
           os.makedirs("generated_images", exist_ok=True)
 
-          # 使用 SD 2.1 base，原生支持 768x768
-          # 如果尺寸是 512x512 会自动缩放，效果良好
-          model_id = "stabilityai/stable-diffusion-2-1-base"
-          print(f"📦 加载 SD 2.1 模型，目标尺寸: {width}x{height}")
+          model_id = "CompVis/stable-diffusion-v1-4"
+          print(f"📦 加载模型...")
 
           pipe = StableDiffusionPipeline.from_pretrained(
               model_id,
@@ -103,26 +103,32 @@ jobs:
               safety_checker=None
           )
           pipe = pipe.to("cpu")
-          # 使用 DPM++ 调度器，4-8 步即可出图
-          pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+          pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 
-          print(f"🎨 生成中 (步数: {steps})...")
-          image = pipe(
-              prompt, 
-              num_inference_steps=steps, 
-              height=height, 
-              width=width,
-              guidance_scale=7.0
-          ).images[0]
+          # 判断是否需要放大
+          max_native = 512
+          if target_width <= max_native and target_height <= max_native:
+              print(f"🎨 直接生成 {target_width}x{target_height} (步数: {steps})...")
+              image = pipe(prompt, num_inference_steps=steps, height=target_height, width=target_width).images[0]
+          else:
+              print(f"🎨 先生成 512x512，再放大到 {target_width}x{target_height}...")
+              # 先生成 512x512
+              base_image = pipe(prompt, num_inference_steps=steps, height=512, width=512).images[0]
+              # 使用高质量 LANCZOS 算法放大
+              scale_w = target_width / 512
+              scale_h = target_height / 512
+              new_size = (target_width, target_height)
+              image = base_image.resize(new_size, Image.Resampling.LANCZOS)
+              print(f"📐 已放大 (缩放比: {scale_w:.1f}x{scale_h:.1f})")
 
           if save_format == 'JPEG' and image.mode != 'RGB':
               image = image.convert('RGB')
           image.save(filename, format=save_format, quality=95)
 
-          print(f"✅ 已保存: {filename} ({width}x{height})")
+          print(f"✅ 已保存: {filename} ({target_width}x{target_height})")
 
           with open('generated_images/latest_info.txt', 'w') as f:
-              f.write(f"Filename: {filename}\nPrompt: {prompt}\nSteps: {steps}\nFormat: {img_format}\nSize: {width}x{height}\nTimestamp: {timestamp}\n")
+              f.write(f"Filename: {filename}\nPrompt: {prompt}\nSteps: {steps}\nFormat: {img_format}\nSize: {target_width}x{target_height}\nTimestamp: {timestamp}\n")
           PYTHON
 
       - name: 提交到仓库
