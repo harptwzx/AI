@@ -11,13 +11,13 @@ on:
       steps:
         description: '推理步数'
         required: false
-        default: '20'
+        default: '4'
         type: choice
         options:
-          - '10'
-          - '20'
-          - '30'
-          - '50'
+          - '4'
+          - '6'
+          - '8'
+          - '12'
       format:
         description: '图片格式'
         required: false
@@ -33,10 +33,7 @@ on:
         type: choice
         options:
           - '512x512'
-          - '768x1024'
-          - '640x480'
           - '768x768'
-          - '1024x768'
 
 jobs:
   generate-image:
@@ -67,7 +64,7 @@ jobs:
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install diffusers transformers accelerate pillow
 
-      - name: 生成图片
+      - name: 生成图片（使用 SD 2.1 支持更大尺寸）
         env:
           PROMPT: ${{ github.event.inputs.prompt }}
           STEPS: ${{ github.event.inputs.steps }}
@@ -76,13 +73,13 @@ jobs:
         run: |
           python << 'PYTHON'
           import torch
-          from diffusers import StableDiffusionPipeline, DDIMScheduler
+          from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
           import os
           from datetime import datetime
           import re
 
           prompt = os.environ.get('PROMPT', 'a cute cat')
-          steps = int(os.environ.get('STEPS', '20'))
+          steps = int(os.environ.get('STEPS', '4'))
           img_format = os.environ.get('FORMAT', 'png').lower()
           size_str = os.environ.get('SIZE', '512x512')
           width, height = map(int, size_str.split('x'))
@@ -95,8 +92,10 @@ jobs:
           filename = f"generated_images/{timestamp}_{safe_prompt}.{ext}"
           os.makedirs("generated_images", exist_ok=True)
 
-          model_id = "CompVis/stable-diffusion-v1-4"
-          print(f"加载模型，目标尺寸: {width}x{height}")
+          # 使用 SD 2.1 base，原生支持 768x768
+          # 如果尺寸是 512x512 会自动缩放，效果良好
+          model_id = "stabilityai/stable-diffusion-2-1-base"
+          print(f"📦 加载 SD 2.1 模型，目标尺寸: {width}x{height}")
 
           pipe = StableDiffusionPipeline.from_pretrained(
               model_id,
@@ -104,16 +103,23 @@ jobs:
               safety_checker=None
           )
           pipe = pipe.to("cpu")
-          pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+          # 使用 DPM++ 调度器，4-8 步即可出图
+          pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
-          print(f"生成图片中 (步数: {steps})...")
-          image = pipe(prompt, num_inference_steps=steps, height=height, width=width).images[0]
+          print(f"🎨 生成中 (步数: {steps})...")
+          image = pipe(
+              prompt, 
+              num_inference_steps=steps, 
+              height=height, 
+              width=width,
+              guidance_scale=7.0
+          ).images[0]
 
           if save_format == 'JPEG' and image.mode != 'RGB':
               image = image.convert('RGB')
           image.save(filename, format=save_format, quality=95)
 
-          print(f"✅ 图片已保存: {filename} ({width}x{height})")
+          print(f"✅ 已保存: {filename} ({width}x{height})")
 
           with open('generated_images/latest_info.txt', 'w') as f:
               f.write(f"Filename: {filename}\nPrompt: {prompt}\nSteps: {steps}\nFormat: {img_format}\nSize: {width}x{height}\nTimestamp: {timestamp}\n")
@@ -135,7 +141,7 @@ jobs:
             echo "无新图片需要提交"
           fi
 
-      - name: 输出结果到 Job Summary
+      - name: 输出结果
         run: |
           python << 'EOF'
           import os
