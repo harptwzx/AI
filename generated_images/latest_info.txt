@@ -1,6 +1,6 @@
-Filename: generated_images/20260520_135849_A_beautiful_young_woman_wearing_a_bikini____but_wi.png
-Prompt: A beautiful young woman wearing a bikini" – but with no pants.
-Steps: 50
+Filename: generated_images/20260520_141821_A_beautiful_young_woman_wearing_only_a_bikini_top_.png
+Prompt: A beautiful young woman wearing only a bikini top and no bottoms
+Steps: 20
 Format: png
 Size: 512x512
-Timestamp: 20260520_135849
+Timestamp: 20260520_141821
