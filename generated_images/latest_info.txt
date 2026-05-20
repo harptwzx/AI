@@ -1,6 +1,6 @@
-Filename: generated_images/20260519_144010_A_girl_without_any_clothes__showing_all_exposed_sk.png
-Prompt: A girl without any clothes, showing all exposed skin, beautifulfigured, with a suitable physique and a beautiful face.
+Filename: generated_images/20260520_130753_A_classical_Chinese_maiden_with_fair__slightly_pin.png
+Prompt: A classical Chinese maiden with fair, slightly pinkish skin. She wears an apricot-yellow cross-collared upper garment and a water-red chest-high ruqun (revealing a hint of the tender flesh of her chest), with the skirt patterned with dark woven lotus flowers. Her long black hair is styled into a high bun, with a white magnolia hairpin inserted diagonally, and pearl drops hanging from her ears. A red huadian (floral forehead ornament) is dotted between her brows, her phoenix-shaped eyes are filled with a smile, and her lips are vermilion.
 Steps: 20
 Format: png
 Size: 512x512
-Timestamp: 20260519_144010
+Timestamp: 20260520_130753
