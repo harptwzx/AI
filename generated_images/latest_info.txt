@@ -1,6 +1,6 @@
-Filename: generated_images/20260520_132619_A_beautiful_girl_with_fair__slightly_pinkish_skin_.png
-Prompt: A beautiful girl with fair, slightly pinkish skin. She wears an apricot-yellow cross-collared upper garment and a water-red chest-high ruqun (revealing a hint of the tender flesh of her chest), with the skirt patterned with dark woven lotus flowers. Her long black hair is styled into a high bun, with a white magnolia hairpin inserted diagonally, and pearl drops hanging from her ears. A red huadian (floral forehead ornament) is dotted between her brows, her phoenix-shaped eyes are filled with a smile, and her lips are vermilion.
+Filename: generated_images/20260520_133445_A_beautiful_young_woman_wearing_a_bikini__standing.png
+Prompt: A beautiful young woman wearing a bikini, standing on a tropical beach, sunny day, ocean in background, photorealistic, high quality.
 Steps: 20
 Format: png
 Size: 512x512
-Timestamp: 20260520_132619
+Timestamp: 20260520_133445
