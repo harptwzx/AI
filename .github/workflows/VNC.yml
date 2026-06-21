@@ -1,0 +1,185 @@
+name: GitHub Actions VNC Desktop
+on: workflow_dispatch
+
+jobs:
+  vnc-desktop:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # ========== 1. 安装最简桌面（~50MB）==========
+      - name: Install minimal X11
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            xorg \
+            openbox \
+            xterm \
+            tigervnc-standalone-server \
+            curl wget \
+            tint2
+          
+          sudo apt-get clean
+
+      # ========== 2. 配置 VNC ==========
+      - name: Setup VNC
+        run: |
+          mkdir -p ~/.vnc
+          echo "github" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+          
+          cat > ~/.vnc/xstartup << 'EOF'
+          #!/bin/bash
+          xrdb $HOME/.Xresources
+          tint2 &
+          openbox-session &
+          xterm -geometry 80x24+10+10 &
+          while true; do
+            sleep 10
+          done
+          EOF
+          chmod +x ~/.vnc/xstartup
+
+      # ========== 3. 启动 VNC（修复进程检测）==========
+      - name: Start VNC
+        run: |
+          # 清理残留
+          vncserver -kill :1 2>/dev/null || true
+          rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 ~/.vnc/*.log
+          
+          # 创建 .Xauthority 文件
+          touch ~/.Xauthority
+          
+          # 启动 VNC
+          vncserver :1 -geometry 1280x720 -depth 16 -localhost no
+          sleep 3
+          
+          # 修复：检测 Xtigervnc 或 Xvnc
+          if pgrep -f "Xtigervnc.*:1" > /dev/null || pgrep -f "Xvnc.*:1" > /dev/null; then
+            echo "✅ VNC 启动成功"
+            vncserver -list
+          else
+            echo "❌ VNC 启动失败"
+            echo "当前 VNC 相关进程："
+            ps aux | grep -i vnc | grep -v grep || echo "无"
+            exit 1
+          fi
+
+      # ========== 4. 启动 bore.pub（带自动重连）==========
+      - name: Start bore tunnel
+        run: |
+          curl -sL https://api.github.com/repos/ekzhang/bore/releases/latest | \
+            grep "browser_download_url.*x86_64-unknown-linux-musl" | \
+            cut -d '"' -f 4 | wget -i - -O bore.tar.gz
+          tar -xzf bore.tar.gz
+          chmod +x bore
+          
+          cat > bore_loop.sh << 'EOF'
+          #!/bin/bash
+          while true; do
+            ./bore local 5901 --to bore.pub 2>&1 | tee -a bore.log
+            echo "[$(date)] bore 断开，3秒后重连..." | tee -a bore.log
+            sleep 3
+          done
+          EOF
+          chmod +x bore_loop.sh
+          nohup ./bore_loop.sh > /dev/null 2>&1 &
+          sleep 5
+
+      # ========== 5. 轻量看门狗（修复进程检测）==========
+      - name: Lightweight watchdog
+        run: |
+          cat > simple_watchdog.sh << 'EOF'
+          #!/bin/bash
+          while true; do
+            # 修复：检测 Xtigervnc 或 Xvnc
+            if ! pgrep -f "Xtigervnc.*:1" > /dev/null && ! pgrep -f "Xvnc.*:1" > /dev/null; then
+              echo "[$(date)] VNC 崩溃，重启中..." >> /tmp/vnc_restart.log
+              vncserver -kill :1 2>/dev/null
+              sleep 2
+              rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1
+              touch ~/.Xauthority
+              vncserver :1 -geometry 1280x720 -depth 16 -localhost no
+              sleep 3
+            fi
+            sleep 15
+          done
+          EOF
+          chmod +x simple_watchdog.sh
+          nohup ./simple_watchdog.sh > /dev/null 2>&1 &
+
+      # ========== 6. 打印连接信息 ==========
+      - name: Print VNC info
+        run: |
+          sleep 8
+          BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log 2>/dev/null | head -1)
+          
+          echo ""
+          echo "╔════════════════════════════════════════════════════════════╗"
+          echo "║                    🖥️  VNC 连接信息                         ║"
+          echo "╠════════════════════════════════════════════════════════════╣"
+          echo "║  地址: bore.pub:${BORE_PORT:-等待中}                        ║"
+          echo "║  密码: github                                              ║"
+          echo "╚════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "💡 VNC 客户端: TigerVNC, RealVNC, TightVNC 均可连接"
+          echo "🔄 自动修复: VNC 崩溃后 15 秒内自动重启"
+          echo ""
+          echo "当前 VNC 状态："
+          vncserver -list 2>/dev/null || echo "无法获取列表"
+
+      # ========== 7. tmate 后台 ==========
+      - name: Start tmate
+        uses: mxschmitt/action-tmate@v3
+        with:
+          detached: true
+          limit-access-to-actor: true
+
+      # ========== 8. 保活循环 ==========
+      - name: Keep alive
+        run: |
+          echo "服务运行中，按 Ctrl+C 或取消工作流即可停止"
+          echo "所有数据会在工作流结束后自动清理"
+          echo ""
+          
+          while true; do
+            BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log 2>/dev/null | tail -1)
+            if pgrep -f "Xtigervnc.*:1" > /dev/null || pgrep -f "Xvnc.*:1" > /dev/null; then
+              VNC_STATUS="✅"
+            else
+              VNC_STATUS="❌"
+            fi
+            echo "[$(date '+%H:%M:%S')] VNC: $VNC_STATUS | bore.pub:${BORE_PORT:------}"
+            sleep 30
+          done
+
+      # ========== 9. 完整清理 ==========
+      - name: Cleanup everything
+        if: always()
+        run: |
+          echo "🧹 开始清理所有数据和缓存..."
+          
+          # 停止所有服务
+          vncserver -kill :1 2>/dev/null || true
+          pkill -f "bore" 2>/dev/null || true
+          pkill -f "watchdog" 2>/dev/null || true
+          pkill -f "openbox" 2>/dev/null || true
+          pkill -f "tint2" 2>/dev/null || true
+          
+          # 删除临时文件
+          rm -rf /tmp/.X1* /tmp/.X11-unix/X1 2>/dev/null || true
+          rm -rf ~/.vnc/*.log ~/.vnc/*.pid ~/.Xauthority 2>/dev/null || true
+          
+          # 删除 bore 和脚本
+          rm -f bore bore.tar.gz bore_loop.sh simple_watchdog.sh bore.log 2>/dev/null || true
+          
+          # 清理 home 目录的临时文件
+          rm -rf ~/.cache ~/.local/share/Trash 2>/dev/null || true
+          
+          # 清理 apt 缓存
+          sudo apt-get clean 2>/dev/null || true
+          
+          echo "✅ 清理完成，所有数据已删除"
