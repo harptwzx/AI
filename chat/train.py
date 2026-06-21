@@ -262,13 +262,13 @@ class GPTModel(tf.Module):
 # ========== 5. 训练（带进度条）==========
 
 # CPU优化参数
-D_MODEL = 64        # 改小
-NUM_LAYERS = 2      # 改少
-NUM_HEADS = 2       # 改少
-DFF = 128           # 改小
+D_MODEL = 128        # 改小
+NUM_LAYERS = 3      # 改少
+NUM_HEADS = 4       # 改少
+DFF = 256           # 改小
 DROPOUT = 0.1
 BATCH_SIZE = 32     # 改小
-EPOCHS = 20         # 先跑20轮
+EPOCHS = 30         # 先跑30轮
 LEARNING_RATE = 0.001
 
 model = GPTModel(
