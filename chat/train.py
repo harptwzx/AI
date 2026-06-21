@@ -40,7 +40,7 @@ def text_to_token_ids(filepath, word_to_id):
 
 
 print("读取哈利波特TXT...")
-token_ids = text_to_token_ids("harry_potter.txt", word_to_id)
+token_ids = text_to_token_ids("merged.txt", word_to_id)
 print(f"总Token数: {len(token_ids)}")
 
 
