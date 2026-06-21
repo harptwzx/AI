@@ -1,0 +1,6 @@
+Filename: generated_images/20260621_095530_生成一副猎奇图片.png
+Prompt: 生成一副猎奇图片
+Steps: 20
+Format: png
+Size: 512x512
+Timestamp: 20260621_095530
