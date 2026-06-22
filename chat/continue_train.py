@@ -10,7 +10,7 @@ with open(vocab_path, 'r', encoding='utf-8') as f:
 id2token = {int(v): k for k, v in vocab.items()}
 vocab_size = len(vocab)
 
-saved_model_path = 'path/to/your/saved_model'
+saved_model_path = './saved_model'
 loaded = tf.saved_model.load(saved_model_path)
 
 infer = loaded.signatures['serving_default']
