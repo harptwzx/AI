@@ -268,7 +268,7 @@ NUM_HEADS = 4       # 改少
 DFF = 256           # 改小
 DROPOUT = 0.1
 BATCH_SIZE = 32     # 改小
-EPOCHS = 20         # 先跑20轮
+EPOCHS = 10         # 先跑10轮
 LEARNING_RATE = 0.001
 
 model = GPTModel(
