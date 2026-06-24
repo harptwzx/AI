@@ -1,9 +1,20 @@
 import json
 import os
+import signal
+import sys
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
+
+# 中断保存
+save_path = "saved_model/interrupted.keras"
+def save_on_interrupt(signum, frame):
+    print(f"\n\n训练被中断，保存到 {save_path} ...")
+    model.save(save_path)
+    print("保存完成！")
+    sys.exit(0)
+signal.signal(signal.SIGINT, save_on_interrupt)
 
 with open("vocab.json", "r", encoding="utf-8") as f:
     vocab = json.load(f)
@@ -21,7 +32,6 @@ BATCH_SIZE = 32
 
 print(f"词表大小: {VOCAB_SIZE}")
 
-# ============ 数据管道 ============
 def text_generator():
     with open("processed.txt", "r", encoding="utf-8") as f:
         all_tokens = []
@@ -39,9 +49,7 @@ def text_generator():
         if len(ids) < SEQ_LEN:
             ids += [PAD_ID] * (SEQ_LEN - len(ids))
         
-        x = ids[:-1]
-        y = ids[1:]
-        yield x, y
+        yield ids[:-1], ids[1:]
 
 dataset = tf.data.Dataset.from_generator(
     text_generator,
@@ -54,15 +62,15 @@ dataset = tf.data.Dataset.from_generator(
 dataset = (dataset
     .shuffle(buffer_size=200000)
     .batch(BATCH_SIZE)
+    .repeat()              # ← 关键：循环数据
     .prefetch(tf.data.AUTOTUNE))
 
-# 估算步数
+# 步数 = 数据量 / batch_size（一轮的步数）
 with open("processed.txt", "r", encoding="utf-8") as f:
-    total_tokens = sum(len(line.split()) for line in f)
-steps = (total_tokens // 64) // BATCH_SIZE
-print(f"预估步数: {steps}")
+    total_lines = sum(1 for _ in f)
+steps = total_lines // BATCH_SIZE
+print(f"每轮步数: {steps}")
 
-# ============ 模型 ============
 EMBED_DIM = 256
 LSTM_UNITS = 512
 
@@ -82,11 +90,10 @@ model.compile(
 
 model.summary()
 
-# ============ 训练：15 epoch ============
 model.fit(
     dataset,
     epochs=15,
-    steps_per_epoch=steps,
+    steps_per_epoch=steps,   # 每轮固定步数
     callbacks=[
         keras.callbacks.EarlyStopping(patience=3, restore_best_weights=True, monitor="loss"),
         keras.callbacks.ModelCheckpoint("saved_model/best_lm.keras", save_best_only=True, monitor="loss"),
@@ -94,16 +101,14 @@ model.fit(
     ]
 )
 
-# ============ 保存 ============
 os.makedirs("saved_model", exist_ok=True)
 model.save("saved_model/phase1_lm.keras")
 model.save("saved_model/phase1_lm.h5")
 
 with open("saved_model/vocab.json", "w", encoding="utf-8") as f:
     json.dump(vocab, f, ensure_ascii=False)
-print("第一阶段完成！")
+print("完成！")
 
-# ============ 生成测试 ============
 def generate(seed_text, max_new=30, temperature=0.8):
     seed_tokens = []
     for w in seed_text.lower().split():
@@ -130,8 +135,6 @@ def generate(seed_text, max_new=30, temperature=0.8):
         current.append(next_id)
     
     tokens = [id_to_token[i] for i in current]
-    
-    # 字母合并成词
     result = ""
     for t in tokens:
         if len(t) == 1 and t.isalpha():
@@ -141,8 +144,7 @@ def generate(seed_text, max_new=30, temperature=0.8):
     
     return " ".join(result.split())
 
-print("\n--- 生成测试 ---")
+print("\n--- 测试 ---")
 print(generate("the cat sat on the"))
 print(generate("in the morning i went to"))
 print(generate("she opened the door and"))
-print(generate("it was a cold winter"))
