@@ -16,42 +16,57 @@ with open("merged.txt", "r", encoding="utf-8") as f:
     lines = f.readlines()
 
 output_lines = []
+in_book_content = False  # 标记是否进入正文
 
 for raw_line in lines:
     line = raw_line.strip()
     
-    # 跳过空行
     if not line:
         continue
     
-    # 1. 去掉页码
+    # 去掉页码
     if re.match(r'-+\s*Page\s*\d+\s*-+', line):
         continue
     
-    # 2. 跳过明显的非正文（封面、目录、页眉等）
-    skip_keywords = [
-        'book covers', 'complete collection', 'chapter', 'contents',
-        'dedication', 'acknowledgements', 'copyright', 'isbn',
-        'printed in', 'first edition', 'publisher', 'all rights reserved'
+    lower = line.lower()
+    
+    # 更强的跳过规则
+    skip_patterns = [
+        'complete', 'collection', 'book covers', 'compiled', 'ocr', 'scanned',
+        'wetaskiwin', 'omnipage', 'dedication', 'acknowledgements', 'copyright',
+        'isbn', 'printed in', 'first edition', 'publisher', 'all rights reserved',
+        'contents', 'chapter one', 'chapter 1', 'prologue', 'epilogue',
+        'j k rowling', 'j.k. rowling', 'scholastic', 'bloomsbury'
     ]
-    if any(k in line.lower() for k in skip_keywords):
+    if any(p in lower for p in skip_patterns):
         continue
     
-    # 3. 转小写
-    line = line.lower()
+    # 跳过纯大写的行（通常是标题）
+    if line.isupper() and len(line) > 3:
+        continue
     
-    # 4. 分词处理
+    # 跳过数字占比过高的行（页码、编号）
+    digits = sum(c.isdigit() for c in line)
+    if digits / len(line) > 0.3:
+        continue
+    
+    # 检测到第一章开始，标记进入正文
+    if 'mr. and mrs.' in lower or 'mr and mrs' in lower or "the boy who lived" in lower:
+        in_book_content = True
+    
+    # 如果没检测到开始标记，但行里有正常叙事内容，也接受
+    # 主要过滤掉明显的非正文
+    
+    line = line.lower()
     words = line.split()
     new_tokens = []
     
     for w in words:
-        # 分离尾部标点
         punct = ''
         while w and w[-1] in '.,!?;:"\'':
             punct = w[-1] + punct
             w = w[:-1]
         
-        # 分离头部标点
         head_punct = ''
         while w and w[0] in '"\'':
             head_punct += w[0]
@@ -60,7 +75,6 @@ for raw_line in lines:
         if not w:
             continue
         
-        # 处理单词
         if head_punct:
             for p in head_punct:
                 if p in vocab_set:
@@ -74,16 +88,14 @@ for raw_line in lines:
                 if p in vocab_set:
                     new_tokens.append(p)
     
-    # 过滤太短的行
     if len(new_tokens) >= 5:
         output_lines.append(" ".join(new_tokens))
 
-# 保存
 with open("processed.txt", "w", encoding="utf-8") as f:
     for line in output_lines:
         f.write(line + "\n")
 
 print(f"处理完成，共 {len(output_lines)} 行")
-print("前10行预览：")
-for line in output_lines[:10]:
+print("前15行预览：")
+for line in output_lines[:15]:
     print(line[:100])
