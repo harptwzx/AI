@@ -9,6 +9,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          # 确保有完整的 git 历史，方便 push
+          fetch-depth: 0
 
       # ========== 1. 安装最简桌面（~50MB）==========
       - name: Install minimal X11
@@ -21,7 +24,6 @@ jobs:
             tigervnc-standalone-server \
             curl wget \
             tint2
-          
           sudo apt-get clean
 
       # ========== 2. 配置 VNC ==========
@@ -43,32 +45,25 @@ jobs:
           EOF
           chmod +x ~/.vnc/xstartup
 
-      # ========== 3. 启动 VNC（修复进程检测）==========
+      # ========== 3. 启动 VNC ==========
       - name: Start VNC
         run: |
-          # 清理残留
           vncserver -kill :1 2>/dev/null || true
           rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 ~/.vnc/*.log
-          
-          # 创建 .Xauthority 文件
           touch ~/.Xauthority
-          
-          # 启动 VNC
           vncserver :1 -geometry 1280x720 -depth 16 -localhost no
           sleep 3
           
-          # 修复：检测 Xtigervnc 或 Xvnc
           if pgrep -f "Xtigervnc.*:1" > /dev/null || pgrep -f "Xvnc.*:1" > /dev/null; then
             echo "✅ VNC 启动成功"
             vncserver -list
           else
             echo "❌ VNC 启动失败"
-            echo "当前 VNC 相关进程："
             ps aux | grep -i vnc | grep -v grep || echo "无"
             exit 1
           fi
 
-      # ========== 4. 启动 bore.pub（带自动重连）==========
+      # ========== 4. 启动 bore.pub ==========
       - name: Start bore tunnel
         run: |
           curl -sL https://api.github.com/repos/ekzhang/bore/releases/latest | \
@@ -89,13 +84,12 @@ jobs:
           nohup ./bore_loop.sh > /dev/null 2>&1 &
           sleep 5
 
-      # ========== 5. 轻量看门狗（修复进程检测）==========
+      # ========== 5. 轻量看门狗 ==========
       - name: Lightweight watchdog
         run: |
           cat > simple_watchdog.sh << 'EOF'
           #!/bin/bash
           while true; do
-            # 修复：检测 Xtigervnc 或 Xvnc
             if ! pgrep -f "Xtigervnc.*:1" > /dev/null && ! pgrep -f "Xvnc.*:1" > /dev/null; then
               echo "[$(date)] VNC 崩溃，重启中..." >> /tmp/vnc_restart.log
               vncserver -kill :1 2>/dev/null
@@ -156,6 +150,67 @@ jobs:
             sleep 30
           done
 
+      # ================================================================
+      # 🔥 重点：无论工作流如何结束，都会执行这个步骤
+      # ================================================================
+      - name: 🔄 Auto push changes to repository
+        if: always()  # 确保任何情况下都会执行（成功、失败、取消）
+        run: |
+          echo "=================================================="
+          echo "📦 开始自动 push 变更到仓库..."
+          echo "=================================================="
+          
+          cd $GITHUB_WORKSPACE
+          
+          # 配置 git 用户信息
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查是否有变更
+          if git status --porcelain | grep -q .; then
+            echo "✅ 检测到文件变更，准备提交..."
+            git status --short
+            
+            # 添加所有变更
+            git add -A
+            
+            # 生成带时间戳的 commit 信息
+            TIMESTAMP=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+            git commit -m "Auto commit from VNC session [${TIMESTAMP}]"
+            
+            # 尝试 push（最多重试 3 次）
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            PUSH_SUCCESS=false
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "🔄 Push 尝试 $RETRY_COUNT/$MAX_RETRIES ..."
+              
+              if git push origin main 2>&1 | tee push.log; then
+                PUSH_SUCCESS=true
+                echo "✅ Push 成功！"
+              else
+                echo "⚠️ Push 失败，等待 5 秒后重试..."
+                git pull --rebase origin main 2>/dev/null || true
+                sleep 5
+              fi
+            done
+            
+            if [ "$PUSH_SUCCESS" = true ]; then
+              echo "✅ 所有变更已成功 push 到仓库"
+            else
+              echo "❌ Push 失败，请检查权限或网络"
+              exit 0  # 不阻断清理流程
+            fi
+          else
+            echo "ℹ️ 没有检测到任何变更，跳过 push"
+          fi
+          
+          echo "=================================================="
+          echo "📦 Auto push 流程完成"
+          echo "=================================================="
+
       # ========== 9. 完整清理 ==========
       - name: Cleanup everything
         if: always()
@@ -172,14 +227,8 @@ jobs:
           # 删除临时文件
           rm -rf /tmp/.X1* /tmp/.X11-unix/X1 2>/dev/null || true
           rm -rf ~/.vnc/*.log ~/.vnc/*.pid ~/.Xauthority 2>/dev/null || true
-          
-          # 删除 bore 和脚本
           rm -f bore bore.tar.gz bore_loop.sh simple_watchdog.sh bore.log 2>/dev/null || true
-          
-          # 清理 home 目录的临时文件
           rm -rf ~/.cache ~/.local/share/Trash 2>/dev/null || true
-          
-          # 清理 apt 缓存
           sudo apt-get clean 2>/dev/null || true
           
           echo "✅ 清理完成，所有数据已删除"
