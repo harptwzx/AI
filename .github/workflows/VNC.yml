@@ -10,8 +10,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          # 确保有完整的 git 历史，方便 push
           fetch-depth: 0
+
+      # ================================================================
+      # 🔥 关键：在安装任何东西之前，先配置 .gitignore
+      # ================================================================
+      - name: 📝 Configure .gitignore before anything
+        run: |
+          cd $GITHUB_WORKSPACE
+          
+          # 创建/更新 .gitignore
+          cat >> .gitignore << 'EOF'
+          
+          # ===== VNC 相关 =====
+          .vnc/
+          .Xauthority
+          /tmp/.X*
+          *.log
+          *.pid
+          
+          # ===== bore 隧道工具 =====
+          bore
+          bore.tar.gz
+          bore_loop.sh
+          bore.log
+          simple_watchdog.sh
+          /tmp/vnc_restart.log
+          
+          # ===== 临时文件 =====
+          *.tmp
+          *.temp
+          /tmp/
+          ~/.cache/
+          ~/.local/share/Trash/
+          
+          # ===== 系统缓存 =====
+          .cache/
+          .local/
+          
+          # ===== 大文件（可选） =====
+          # *.zip
+          # *.tar.gz
+          EOF
+          
+          # 如果 .gitignore 已有内容，去重
+          sort -u .gitignore -o .gitignore
+          
+          echo "✅ .gitignore 已配置，内容如下："
+          cat .gitignore
 
       # ========== 1. 安装最简桌面（~50MB）==========
       - name: Install minimal X11
@@ -138,6 +184,12 @@ jobs:
           echo "服务运行中，按 Ctrl+C 或取消工作流即可停止"
           echo "所有数据会在工作流结束后自动清理"
           echo ""
+          echo "📝 以下文件/目录已被 .gitignore 排除，不会上传："
+          echo "  - .vnc/ (VNC 配置)"
+          echo "  - bore, bore.tar.gz, bore.log (隧道工具)"
+          echo "  - *.log, *.pid (日志文件)"
+          echo "  - /tmp/ (临时文件)"
+          echo ""
           
           while true; do
             BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log 2>/dev/null | tail -1)
@@ -151,10 +203,10 @@ jobs:
           done
 
       # ================================================================
-      # 🔥 重点：无论工作流如何结束，都会执行这个步骤
+      # 🔥 Auto push 变更到仓库（只提交用户创建的文件）
       # ================================================================
       - name: 🔄 Auto push changes to repository
-        if: always()  # 确保任何情况下都会执行（成功、失败、取消）
+        if: always()
         run: |
           echo "=================================================="
           echo "📦 开始自动 push 变更到仓库..."
@@ -166,19 +218,35 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 检查是否有变更
+          # 检查 .gitignore 是否生效
+          echo "📋 当前 .gitignore 内容："
+          cat .gitignore
+          echo ""
+          
+          # 查看哪些文件会被忽略（仅显示，不操作）
+          echo "📋 将被忽略的文件（不提交）："
+          git status --ignored --short | grep '^!!' || echo "  (无忽略文件)"
+          echo ""
+          
+          # 检查是否有未被忽略的变更
           if git status --porcelain | grep -q .; then
-            echo "✅ 检测到文件变更，准备提交..."
+            echo "✅ 检测到需要提交的变更："
             git status --short
+            echo ""
             
-            # 添加所有变更
+            # 添加所有变更（.gitignore 会自动排除不想要的文件）
             git add -A
+            
+            # 再次确认添加了哪些文件
+            echo "📦 将要提交的文件列表："
+            git diff --cached --name-only || echo "  (无)"
+            echo ""
             
             # 生成带时间戳的 commit 信息
             TIMESTAMP=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
-            git commit -m "Auto commit from VNC session [${TIMESTAMP}]"
+            git commit -m "Auto commit from VNC session [${TIMESTAMP}]" || echo "ℹ️ 没有新的变更需要提交"
             
-            # 尝试 push（最多重试 3 次）
+            # 尝试 push
             MAX_RETRIES=3
             RETRY_COUNT=0
             PUSH_SUCCESS=false
@@ -201,10 +269,10 @@ jobs:
               echo "✅ 所有变更已成功 push 到仓库"
             else
               echo "❌ Push 失败，请检查权限或网络"
-              exit 0  # 不阻断清理流程
+              exit 0
             fi
           else
-            echo "ℹ️ 没有检测到任何变更，跳过 push"
+            echo "ℹ️ 没有检测到任何需要提交的变更（临时文件已被 .gitignore 排除）"
           fi
           
           echo "=================================================="
