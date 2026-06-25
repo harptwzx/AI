@@ -13,13 +13,25 @@ jobs:
           fetch-depth: 0
 
       # ================================================================
-      # 🔥 关键：在安装任何东西之前，先配置 .gitignore
+      # 🔑 配置 SSH 密钥（用于 git push）
+      # ================================================================
+      - name: 🔑 Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          # 注意：这里需要添加你的 SSH 私钥，不是公钥！
+          # 私钥以 "-----BEGIN OPENSSH PRIVATE KEY-----" 开头
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          echo "✅ SSH 密钥配置完成"
+
+      # ================================================================
+      # 📝 配置 .gitignore
       # ================================================================
       - name: 📝 Configure .gitignore before anything
         run: |
           cd $GITHUB_WORKSPACE
           
-          # 创建/更新 .gitignore
           cat >> .gitignore << 'EOF'
           
           # ===== VNC 相关 =====
@@ -47,19 +59,12 @@ jobs:
           # ===== 系统缓存 =====
           .cache/
           .local/
-          
-          # ===== 大文件（可选） =====
-          # *.zip
-          # *.tar.gz
           EOF
           
-          # 如果 .gitignore 已有内容，去重
           sort -u .gitignore -o .gitignore
-          
-          echo "✅ .gitignore 已配置，内容如下："
-          cat .gitignore
+          echo "✅ .gitignore 已配置"
 
-      # ========== 1. 安装最简桌面（~50MB）==========
+      # ========== 1. 安装最简桌面 ==========
       - name: Install minimal X11
         run: |
           sudo apt-get update
@@ -203,7 +208,7 @@ jobs:
           done
 
       # ================================================================
-      # 🔥 Auto push 变更到仓库（只提交用户创建的文件）
+      # 🔄 Auto push 变更到仓库（使用 SSH）
       # ================================================================
       - name: 🔄 Auto push changes to repository
         if: always()
@@ -218,35 +223,34 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 检查 .gitignore 是否生效
-          echo "📋 当前 .gitignore 内容："
-          cat .gitignore
+          # 🔑 切换到 SSH 协议
+          git remote set-url origin git@github.com:harptwzx/AI.git
+          
+          echo "📋 当前 remote URL："
+          git remote -v
           echo ""
           
-          # 查看哪些文件会被忽略（仅显示，不操作）
+          # 查看 .gitignore 效果
           echo "📋 将被忽略的文件（不提交）："
           git status --ignored --short | grep '^!!' || echo "  (无忽略文件)"
           echo ""
           
-          # 检查是否有未被忽略的变更
+          # 检查是否有变更
           if git status --porcelain | grep -q .; then
             echo "✅ 检测到需要提交的变更："
             git status --short
             echo ""
             
-            # 添加所有变更（.gitignore 会自动排除不想要的文件）
             git add -A
             
-            # 再次确认添加了哪些文件
             echo "📦 将要提交的文件列表："
             git diff --cached --name-only || echo "  (无)"
             echo ""
             
-            # 生成带时间戳的 commit 信息
             TIMESTAMP=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
             git commit -m "Auto commit from VNC session [${TIMESTAMP}]" || echo "ℹ️ 没有新的变更需要提交"
             
-            # 尝试 push
+            # 尝试 push（最多重试 3 次）
             MAX_RETRIES=3
             RETRY_COUNT=0
             PUSH_SUCCESS=false
@@ -255,7 +259,7 @@ jobs:
               RETRY_COUNT=$((RETRY_COUNT + 1))
               echo "🔄 Push 尝试 $RETRY_COUNT/$MAX_RETRIES ..."
               
-              if git push origin main 2>&1 | tee push.log; then
+              if git push origin main 2>&1; then
                 PUSH_SUCCESS=true
                 echo "✅ Push 成功！"
               else
@@ -268,11 +272,11 @@ jobs:
             if [ "$PUSH_SUCCESS" = true ]; then
               echo "✅ 所有变更已成功 push 到仓库"
             else
-              echo "❌ Push 失败，请检查权限或网络"
+              echo "❌ Push 失败，请检查 SSH 密钥配置"
               exit 0
             fi
           else
-            echo "ℹ️ 没有检测到任何需要提交的变更（临时文件已被 .gitignore 排除）"
+            echo "ℹ️ 没有检测到任何需要提交的变更"
           fi
           
           echo "=================================================="
@@ -285,14 +289,12 @@ jobs:
         run: |
           echo "🧹 开始清理所有数据和缓存..."
           
-          # 停止所有服务
           vncserver -kill :1 2>/dev/null || true
           pkill -f "bore" 2>/dev/null || true
           pkill -f "watchdog" 2>/dev/null || true
           pkill -f "openbox" 2>/dev/null || true
           pkill -f "tint2" 2>/dev/null || true
           
-          # 删除临时文件
           rm -rf /tmp/.X1* /tmp/.X11-unix/X1 2>/dev/null || true
           rm -rf ~/.vnc/*.log ~/.vnc/*.pid ~/.Xauthority 2>/dev/null || true
           rm -f bore bore.tar.gz bore_loop.sh simple_watchdog.sh bore.log 2>/dev/null || true
