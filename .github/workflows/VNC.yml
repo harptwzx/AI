@@ -13,22 +13,9 @@ jobs:
           fetch-depth: 0
 
       # ================================================================
-      # 🔑 配置 SSH 密钥（用于 git push）
+      # 📝 配置 .gitignore（在 VNC 启动前配置）
       # ================================================================
-      - name: 🔑 Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          # 注意：这里需要添加你的 SSH 私钥，不是公钥！
-          # 私钥以 "-----BEGIN OPENSSH PRIVATE KEY-----" 开头
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          echo "✅ SSH 密钥配置完成"
-
-      # ================================================================
-      # 📝 配置 .gitignore
-      # ================================================================
-      - name: 📝 Configure .gitignore before anything
+      - name: 📝 Configure .gitignore
         run: |
           cd $GITHUB_WORKSPACE
           
@@ -208,7 +195,7 @@ jobs:
           done
 
       # ================================================================
-      # 🔄 Auto push 变更到仓库（使用 SSH）
+      # 🔄 Auto push 变更到仓库（使用 HTTPS + GITHUB_TOKEN）
       # ================================================================
       - name: 🔄 Auto push changes to repository
         if: always()
@@ -223,10 +210,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 🔑 切换到 SSH 协议
-          git remote set-url origin git@github.com:harptwzx/AI.git
+          # 🔑 使用 GITHUB_TOKEN 进行身份验证（和你的旧版本一样）
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/harptwzx/AI.git
           
-          echo "📋 当前 remote URL："
+          echo "📋 当前 remote URL（token 已隐藏）："
           git remote -v
           echo ""
           
@@ -272,7 +259,7 @@ jobs:
             if [ "$PUSH_SUCCESS" = true ]; then
               echo "✅ 所有变更已成功 push 到仓库"
             else
-              echo "❌ Push 失败，请检查 SSH 密钥配置"
+              echo "❌ Push 失败，请检查 Actions 权限设置"
               exit 0
             fi
           else
