@@ -1,291 +1,145 @@
-name: GitHub Actions VNC Desktop
-on: workflow_dispatch
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+    with:
+      token: ${{ secrets.GITHUB_TOKEN }}
 
-jobs:
-  vnc-desktop:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 360
+  # ========== 1. 安装 Python 3.10（22.04 默认自带）==========
+  - name: Setup Python 3.10
+    run: |
+      python3 --version
+      python3 -m pip install --upgrade "pip==21.3.1"
+      python3 -m pip --version
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+  # ========== 2. 安装桌面环境 ==========
+  - name: Install dependencies
+    run: |
+      sudo apt-get update
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        openbox obconf \
+        lxpanel pcmanfm \
+        xterm \
+        tigervnc-standalone-server \
+        xfonts-base xfonts-75dpi xfonts-100dpi \
+        fontconfig \
+        autocutsel \
+        curl wget \
+        git
 
-      # ================================================================
-      # 📝 配置 .gitignore（在 VNC 启动前配置）
-      # ================================================================
-      - name: 📝 Configure .gitignore
-        run: |
-          cd $GITHUB_WORKSPACE
-          
-          cat >> .gitignore << 'EOF'
-          
-          # ===== VNC 相关 =====
-          .vnc/
-          .Xauthority
-          /tmp/.X*
-          *.log
-          *.pid
-          
-          # ===== bore 隧道工具 =====
-          bore
-          bore.tar.gz
-          bore_loop.sh
-          bore.log
-          simple_watchdog.sh
-          /tmp/vnc_restart.log
-          
-          # ===== 临时文件 =====
-          *.tmp
-          *.temp
-          /tmp/
-          ~/.cache/
-          ~/.local/share/Trash/
-          
-          # ===== 系统缓存 =====
-          .cache/
-          .local/
-          EOF
-          
-          sort -u .gitignore -o .gitignore
-          echo "✅ .gitignore 已配置"
+  # ========== 3. 配置 Git ==========
+  - name: Configure Git
+    run: |
+      git config --global user.name "harptwzx"
+      git config --global user.email "wzx123_snake@qq.com"
 
-      # ========== 1. 安装最简桌面 ==========
-      - name: Install minimal X11
-        run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            xorg \
-            openbox \
-            xterm \
-            tigervnc-standalone-server \
-            curl wget \
-            tint2
-          sudo apt-get clean
+  # ========== 4. 配置 VNC ==========
+  - name: Setup VNC
+    run: |
+      mkdir -p ~/.vnc
+      echo "github" | vncpasswd -f > ~/.vnc/passwd
+      chmod 600 ~/.vnc/passwd
+      touch ~/.Xauthority
 
-      # ========== 2. 配置 VNC ==========
-      - name: Setup VNC
-        run: |
-          mkdir -p ~/.vnc
-          echo "github" | vncpasswd -f > ~/.vnc/passwd
-          chmod 600 ~/.vnc/passwd
-          
-          cat > ~/.vnc/xstartup << 'EOF'
-          #!/bin/bash
-          xrdb $HOME/.Xresources
-          tint2 &
-          openbox-session &
-          xterm -geometry 80x24+10+10 &
-          while true; do
-            sleep 10
-          done
-          EOF
-          chmod +x ~/.vnc/xstartup
+  # ========== 5. 启动 VNC + Openbox ==========
+  - name: Start VNC Server
+    run: |
+      vncserver -kill :1 2>/dev/null || true
+      rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+      vncserver :1 -geometry 1280x720 -depth 24 -localhost no -xstartup /usr/bin/openbox-session
+      sleep 3
 
-      # ========== 3. 启动 VNC ==========
-      - name: Start VNC
-        run: |
-          vncserver -kill :1 2>/dev/null || true
-          rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 ~/.vnc/*.log
-          touch ~/.Xauthority
-          vncserver :1 -geometry 1280x720 -depth 16 -localhost no
-          sleep 3
-          
-          if pgrep -f "Xtigervnc.*:1" > /dev/null || pgrep -f "Xvnc.*:1" > /dev/null; then
-            echo "✅ VNC 启动成功"
-            vncserver -list
-          else
-            echo "❌ VNC 启动失败"
-            ps aux | grep -i vnc | grep -v grep || echo "无"
-            exit 1
-          fi
+  # ========== 6. 启动桌面组件 ==========
+  - name: Start Desktop
+    run: |
+      DISPLAY=:1 lxpanel &
+      DISPLAY=:1 pcmanfm --desktop &
+      sleep 2
 
-      # ========== 4. 启动 bore.pub ==========
-      - name: Start bore tunnel
-        run: |
-          curl -sL https://api.github.com/repos/ekzhang/bore/releases/latest | \
-            grep "browser_download_url.*x86_64-unknown-linux-musl" | \
-            cut -d '"' -f 4 | wget -i - -O bore.tar.gz
-          tar -xzf bore.tar.gz
-          chmod +x bore
-          
-          cat > bore_loop.sh << 'EOF'
-          #!/bin/bash
-          while true; do
-            ./bore local 5901 --to bore.pub 2>&1 | tee -a bore.log
-            echo "[$(date)] bore 断开，3秒后重连..." | tee -a bore.log
-            sleep 3
-          done
-          EOF
-          chmod +x bore_loop.sh
-          nohup ./bore_loop.sh > /dev/null 2>&1 &
-          sleep 5
+  # ========== 7. 启动 bore.pub 隧道 ==========
+  - name: Expose VNC via bore.pub
+    run: |
+      curl -sL https://api.github.com/repos/ekzhang/bore/releases/latest | \
+        grep "browser_download_url.*x86_64-unknown-linux-musl" | \
+        cut -d '"' -f 4 | wget -i - -O bore.tar.gz
+      tar -xzf bore.tar.gz
+      chmod +x bore
+      
+      nohup ./bore local 5901 --to bore.pub > bore.log 2>&1 &
+      sleep 5
 
-      # ========== 5. 轻量看门狗 ==========
-      - name: Lightweight watchdog
-        run: |
-          cat > simple_watchdog.sh << 'EOF'
-          #!/bin/bash
-          while true; do
-            if ! pgrep -f "Xtigervnc.*:1" > /dev/null && ! pgrep -f "Xvnc.*:1" > /dev/null; then
-              echo "[$(date)] VNC 崩溃，重启中..." >> /tmp/vnc_restart.log
-              vncserver -kill :1 2>/dev/null
-              sleep 2
-              rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1
-              touch ~/.Xauthority
-              vncserver :1 -geometry 1280x720 -depth 16 -localhost no
-              sleep 3
-            fi
-            sleep 15
-          done
-          EOF
-          chmod +x simple_watchdog.sh
-          nohup ./simple_watchdog.sh > /dev/null 2>&1 &
+  # ========== 8. 打印 VNC 连接信息 ==========
+  - name: Print VNC info
+    run: |
+      BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log | head -1)
+      
+      echo ""
+      echo "╔════════════════════════════════════════════════════════════╗"
+      echo "║                    🖥️  VNC 连接信息                         ║"
+      echo "╠════════════════════════════════════════════════════════════╣"
+      echo "║  地址: bore.pub:${BORE_PORT}                                 ║"
+      echo "║  密码: github                                              ║"
+      echo "╚════════════════════════════════════════════════════════════╝"
 
-      # ========== 6. 打印连接信息 ==========
-      - name: Print VNC info
-        run: |
-          sleep 8
-          BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log 2>/dev/null | head -1)
-          
-          echo ""
-          echo "╔════════════════════════════════════════════════════════════╗"
-          echo "║                    🖥️  VNC 连接信息                         ║"
-          echo "╠════════════════════════════════════════════════════════════╣"
-          echo "║  地址: bore.pub:${BORE_PORT:-等待中}                        ║"
-          echo "║  密码: github                                              ║"
-          echo "╚════════════════════════════════════════════════════════════╝"
-          echo ""
-          echo "💡 VNC 客户端: TigerVNC, RealVNC, TightVNC 均可连接"
-          echo "🔄 自动修复: VNC 崩溃后 15 秒内自动重启"
-          echo ""
-          echo "当前 VNC 状态："
-          vncserver -list 2>/dev/null || echo "无法获取列表"
+  # ========== 9. 启动 tmate（后台模式，自动打印 SSH 链接）==========
+  - name: Start tmate in background
+    uses: mxschmitt/action-tmate@v3
+    with:
+      detached: true
+      limit-access-to-actor: true
 
-      # ========== 7. tmate 后台 ==========
-      - name: Start tmate
-        uses: mxschmitt/action-tmate@v3
-        with:
-          detached: true
-          limit-access-to-actor: true
+  # ========== 10. 保持运行 + 持续打印连接信息 ==========
+  - name: Keep alive
+    run: |
+      echo "服务运行中..."
+      echo "SSH 链接在上面步骤已打印"
+      echo "输入 exit 断开 SSH 后会自动关闭..."
+      echo ""
+      
+      for i in $(seq 1 360); do
+        BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log 2>/dev/null | head -1)
+        
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "⏱️  运行时间: ${i}0 秒"
+        echo ""
+        echo "🖥️  VNC 桌面"
+        if [ -n "$BORE_PORT" ]; then
+          echo "   地址: bore.pub:${BORE_PORT}"
+          echo "   密码: github"
+        else
+          echo "   启动中..."
+        fi
+        echo ""
+        echo "🔑 SSH 终端: 查看 Start tmate in background 步骤日志"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        sleep 10
+      done
 
-      # ========== 8. 保活循环 ==========
-      - name: Keep alive
-        run: |
-          echo "服务运行中，按 Ctrl+C 或取消工作流即可停止"
-          echo "所有数据会在工作流结束后自动清理"
-          echo ""
-          echo "📝 以下文件/目录已被 .gitignore 排除，不会上传："
-          echo "  - .vnc/ (VNC 配置)"
-          echo "  - bore, bore.tar.gz, bore.log (隧道工具)"
-          echo "  - *.log, *.pid (日志文件)"
-          echo "  - /tmp/ (临时文件)"
-          echo ""
-          
-          while true; do
-            BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log 2>/dev/null | tail -1)
-            if pgrep -f "Xtigervnc.*:1" > /dev/null || pgrep -f "Xvnc.*:1" > /dev/null; then
-              VNC_STATUS="✅"
-            else
-              VNC_STATUS="❌"
-            fi
-            echo "[$(date '+%H:%M:%S')] VNC: $VNC_STATUS | bore.pub:${BORE_PORT:------}"
-            sleep 30
-          done
+  # ========== 11. 用户 exit 后上传新文件到 Git ==========
+  - name: Upload new files to Git
+    if: always()
+    run: |
+      echo "正在检测并上传用户添加的文件..."
+      
+      BRANCH="${GITHUB_REF#refs/heads/}"
+      
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "检测到新的文件或修改，开始上传..."
+        
+        git add -A
+        git commit -m "auto: upload files from GitHub Actions VNC session ($(date '+%Y-%m-%d %H:%M:%S'))"
+        git push origin "$BRANCH"
+        
+        echo "✅ 文件已成功上传到 GitHub"
+      else
+        echo "没有检测到新文件或修改，无需上传"
+      fi
 
-      # ================================================================
-      # 🔄 Auto push 变更到仓库（使用 HTTPS + GITHUB_TOKEN）
-      # ================================================================
-      - name: 🔄 Auto push changes to repository
-        if: always()
-        run: |
-          echo "=================================================="
-          echo "📦 开始自动 push 变更到仓库..."
-          echo "=================================================="
-          
-          cd $GITHUB_WORKSPACE
-          
-          # 配置 git 用户信息
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # 🔑 使用 GITHUB_TOKEN 进行身份验证（和你的旧版本一样）
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/harptwzx/AI.git
-          
-          echo "📋 当前 remote URL（token 已隐藏）："
-          git remote -v
-          echo ""
-          
-          # 查看 .gitignore 效果
-          echo "📋 将被忽略的文件（不提交）："
-          git status --ignored --short | grep '^!!' || echo "  (无忽略文件)"
-          echo ""
-          
-          # 检查是否有变更
-          if git status --porcelain | grep -q .; then
-            echo "✅ 检测到需要提交的变更："
-            git status --short
-            echo ""
-            
-            git add -A
-            
-            echo "📦 将要提交的文件列表："
-            git diff --cached --name-only || echo "  (无)"
-            echo ""
-            
-            TIMESTAMP=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
-            git commit -m "Auto commit from VNC session [${TIMESTAMP}]" || echo "ℹ️ 没有新的变更需要提交"
-            
-            # 尝试 push（最多重试 3 次）
-            MAX_RETRIES=3
-            RETRY_COUNT=0
-            PUSH_SUCCESS=false
-            
-            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
-              RETRY_COUNT=$((RETRY_COUNT + 1))
-              echo "🔄 Push 尝试 $RETRY_COUNT/$MAX_RETRIES ..."
-              
-              if git push origin main 2>&1; then
-                PUSH_SUCCESS=true
-                echo "✅ Push 成功！"
-              else
-                echo "⚠️ Push 失败，等待 5 秒后重试..."
-                git pull --rebase origin main 2>/dev/null || true
-                sleep 5
-              fi
-            done
-            
-            if [ "$PUSH_SUCCESS" = true ]; then
-              echo "✅ 所有变更已成功 push 到仓库"
-            else
-              echo "❌ Push 失败，请检查 Actions 权限设置"
-              exit 0
-            fi
-          else
-            echo "ℹ️ 没有检测到任何需要提交的变更"
-          fi
-          
-          echo "=================================================="
-          echo "📦 Auto push 流程完成"
-          echo "=================================================="
-
-      # ========== 9. 完整清理 ==========
-      - name: Cleanup everything
-        if: always()
-        run: |
-          echo "🧹 开始清理所有数据和缓存..."
-          
-          vncserver -kill :1 2>/dev/null || true
-          pkill -f "bore" 2>/dev/null || true
-          pkill -f "watchdog" 2>/dev/null || true
-          pkill -f "openbox" 2>/dev/null || true
-          pkill -f "tint2" 2>/dev/null || true
-          
-          rm -rf /tmp/.X1* /tmp/.X11-unix/X1 2>/dev/null || true
-          rm -rf ~/.vnc/*.log ~/.vnc/*.pid ~/.Xauthority 2>/dev/null || true
-          rm -f bore bore.tar.gz bore_loop.sh simple_watchdog.sh bore.log 2>/dev/null || true
-          rm -rf ~/.cache ~/.local/share/Trash 2>/dev/null || true
-          sudo apt-get clean 2>/dev/null || true
-          
-          echo "✅ 清理完成，所有数据已删除"
+  # ========== 12. 清理并关闭 ==========
+  - name: Cleanup and shutdown
+    if: always()
+    run: |
+      echo "正在清理..."
+      vncserver -kill :1 2>/dev/null || true
+      killall bore 2>/dev/null || true
