@@ -92,7 +92,7 @@ model.summary()
 
 model.fit(
     dataset,
-    epochs=15,
+    epochs=10,
     steps_per_epoch=steps,   # 每轮固定步数
     callbacks=[
         keras.callbacks.EarlyStopping(patience=3, restore_best_weights=True, monitor="loss"),
