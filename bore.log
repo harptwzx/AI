@@ -1,0 +1,3 @@
+[2m2026-06-26T01:14:34.428363Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m55555
+[2m2026-06-26T01:14:34.428410Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:55555
+[2m2026-06-26T01:15:06.854057Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m16ab121a-27c8-4578-9784-739e68cc9d77[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
