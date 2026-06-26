@@ -6,6 +6,9 @@ on:
 jobs:
   vnc-desktop:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,6 +135,9 @@ jobs:
           
           BRANCH="${GITHUB_REF#refs/heads/}"
           
+          # 设置带 token 的远程 URL
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          
           if [ -n "$(git status --porcelain)" ]; then
             echo "检测到新的文件或修改，开始上传..."
             
@@ -143,6 +149,8 @@ jobs:
           else
             echo "没有检测到新文件或修改，无需上传"
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ========== 12. 清理并关闭 ==========
       - name: Cleanup and shutdown
