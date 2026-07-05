@@ -8,7 +8,7 @@ from tensorflow.keras import layers
 import numpy as np
 
 # 中断保存
-save_path = "saved_model/interrupted.keras"
+save_path = "saved_model/interrupted_v2.keras"
 def save_on_interrupt(signum, frame):
     print(f"\n\n训练被中断，保存到 {save_path} ...")
     model.save(save_path)
@@ -40,15 +40,15 @@ def text_generator():
             if len(tokens) > 0:
                 all_tokens.extend(tokens)
                 all_tokens.append("<|eos|>")
-    
+
     stride = 64
     for i in range(0, len(all_tokens) - SEQ_LEN, stride):
         chunk = all_tokens[i:i + SEQ_LEN]
         ids = [token_to_id.get(t, UNK_ID) for t in chunk]
-        
+
         if len(ids) < SEQ_LEN:
             ids += [PAD_ID] * (SEQ_LEN - len(ids))
-        
+
         yield ids[:-1], ids[1:]
 
 dataset = tf.data.Dataset.from_generator(
@@ -62,53 +62,46 @@ dataset = tf.data.Dataset.from_generator(
 dataset = (dataset
     .shuffle(buffer_size=200000)
     .batch(BATCH_SIZE)
-    .repeat()              # ← 关键：循环数据
+    .repeat()
     .prefetch(tf.data.AUTOTUNE))
 
-# 步数 = 数据量 / batch_size（一轮的步数）
 with open("processed.txt", "r", encoding="utf-8") as f:
     total_lines = sum(1 for _ in f)
 steps = total_lines // BATCH_SIZE
 print(f"每轮步数: {steps}")
 
-EMBED_DIM = 256
-LSTM_UNITS = 512
+# ============ 加载已有模型（关键！） ============
+print("\n========== 加载已有模型 ==========")
+model = keras.models.load_model("saved_model/phase1_lm.keras")
+model.summary()
+print(f"总参数量: {model.count_params():,}")
 
-inputs = keras.Input(shape=(SEQ_LEN - 1,))
-x = layers.Embedding(VOCAB_SIZE, EMBED_DIM, mask_zero=True)(inputs)
-x = layers.Bidirectional(layers.LSTM(LSTM_UNITS, return_sequences=True, dropout=0.2))(x)
-x = layers.LSTM(LSTM_UNITS, return_sequences=True, dropout=0.2)(x)
-outputs = layers.TimeDistributed(layers.Dense(VOCAB_SIZE, activation="softmax"))(x)
-
-model = keras.Model(inputs, outputs)
-
+# ============ 继续训练 ============
+print("\n========== 开始继续训练 ==========")
 model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=0.002),
+    optimizer=keras.optimizers.Adam(learning_rate=0.0002),  # 学习率调小
     loss="sparse_categorical_crossentropy",
     metrics=["accuracy"]
 )
 
-model.summary()
-
 model.fit(
     dataset,
-    epochs=10,
-    steps_per_epoch=steps,   # 每轮固定步数
+    epochs=20,
+    steps_per_epoch=steps,
     callbacks=[
-        keras.callbacks.EarlyStopping(patience=3, restore_best_weights=True, monitor="loss"),
-        keras.callbacks.ModelCheckpoint("saved_model/best_lm.keras", save_best_only=True, monitor="loss"),
-        keras.callbacks.ReduceLROnPlateau(factor=0.5, patience=1, monitor="loss", min_lr=1e-6)
+        keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True, monitor="loss"),
+        keras.callbacks.ModelCheckpoint("saved_model/best_continue.keras", save_best_only=True, monitor="loss"),
+        keras.callbacks.ReduceLROnPlateau(factor=0.5, patience=2, monitor="loss", min_lr=1e-6)
     ]
 )
 
 os.makedirs("saved_model", exist_ok=True)
-model.save("saved_model/phase1_lm.keras")
-model.save("saved_model/phase1_lm.h5")
+model.save("saved_model/phase1_lm_v2.keras")
+model.save("saved_model/phase1_lm_v2.h5")
 
-with open("saved_model/vocab.json", "w", encoding="utf-8") as f:
-    json.dump(vocab, f, ensure_ascii=False)
-print("完成！")
+print("\n继续训练完成！")
 
+# ============ 生成测试 ============
 def generate(seed_text, max_new=30, temperature=0.8):
     seed_tokens = []
     for w in seed_text.lower().split():
@@ -116,24 +109,24 @@ def generate(seed_text, max_new=30, temperature=0.8):
             seed_tokens.append(w)
         else:
             seed_tokens.extend(list(w))
-    
+
     current = [token_to_id.get(t, UNK_ID) for t in seed_tokens]
-    
+
     for _ in range(max_new):
         padded = current[-(SEQ_LEN-1):]
         padded = [PAD_ID] * ((SEQ_LEN-1) - len(padded)) + padded
-        
+
         pred = model.predict(np.array([padded]), verbose=0)
         logits = pred[0, -1, :] / temperature
         logits = logits - np.max(logits)
         probs = np.exp(logits)
         probs = probs / np.sum(probs)
         next_id = np.random.choice(VOCAB_SIZE, p=probs)
-        
+
         if next_id == EOS_ID:
             break
         current.append(next_id)
-    
+
     tokens = [id_to_token[i] for i in current]
     result = ""
     for t in tokens:
@@ -141,10 +134,10 @@ def generate(seed_text, max_new=30, temperature=0.8):
             result += t
         else:
             result += " " + t + " "
-    
+
     return " ".join(result.split())
 
-print("\n--- 测试 ---")
+print("\n--- 生成测试 ---")
 print(generate("the cat sat on the"))
 print(generate("in the morning i went to"))
 print(generate("she opened the door and"))
