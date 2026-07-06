@@ -99,8 +99,8 @@ train_steps = max(1, len(train_lines) // BATCH_SIZE)
 val_steps = max(1, len(val_lines) // BATCH_SIZE)
 print(f"训练步数/epoch: {train_steps}, 验证步数/epoch: {val_steps}")
 
-# ============ 模型结构（保持原样，只加 Dropout） ============
-def build_model(vocab_size, seq_len, embed_dim=256, num_heads=8, ff_dim=512, num_layers=4, dropout_rate=0.1):
+# ============ 缩小模型：适配 96K token 数据量 ============
+def build_model(vocab_size, seq_len, embed_dim=64, num_heads=4, ff_dim=128, num_layers=2, dropout_rate=0.3):
     inputs = layers.Input(shape=(seq_len - 1,))
     
     x = layers.Embedding(vocab_size, embed_dim)(inputs)
@@ -148,7 +148,7 @@ print("\n========== 开始训练 ==========")
 
 model.compile(
     optimizer=keras.optimizers.AdamW(learning_rate=0.001, weight_decay=0.01),
-    loss="sparse_categorical_crossentropy",  # 直接用标准损失，不再折腾标签平滑
+    loss="sparse_categorical_crossentropy",
     metrics=["accuracy"]
 )
 
@@ -176,14 +176,14 @@ class BestModelTracker(keras.callbacks.Callback):
 callbacks = [
     keras.callbacks.EarlyStopping(
         monitor="val_loss",
-        patience=3,
+        patience=5,           # 放宽到5，小模型需要更多epoch
         restore_best_weights=True,
         verbose=1
     ),
     keras.callbacks.ReduceLROnPlateau(
         monitor="val_loss",
         factor=0.5,
-        patience=1,
+        patience=2,
         min_lr=1e-6,
         verbose=1
     ),
@@ -200,7 +200,7 @@ callbacks = [
 history = model.fit(
     train_ds,
     validation_data=val_ds,
-    epochs=10,
+    epochs=100,               # 设大点，小模型需要更多epoch
     steps_per_epoch=train_steps,
     validation_steps=val_steps,
     callbacks=callbacks,
@@ -213,23 +213,19 @@ if best_weights is not None:
     print(f"已恢复最佳权重 (val_loss={best_val_loss:.4f})")
 
 model.save("saved_model/phase1_lm.keras")
-model.save("saved_model/phase1_lm_v2.keras")
-model.save("saved_model/phase1_lm_v2.h5")
 print("✅ 保存完成！")
 
 for tmp in ["processed_train.tmp", "processed_val.tmp"]:
     if os.path.exists(tmp):
         os.remove(tmp)
 
-# ============ 生成测试（适配词级 token + 标点处理） ============
+# ============ 生成测试 ============
 def generate(seed_text, max_new=30, temperature=0.8):
-    # 种子文本按词表切分
     seed_tokens = []
     for w in seed_text.lower().split():
         if w in vocab:
             seed_tokens.append(w)
         else:
-            # 尝试拆成字符
             seed_tokens.extend(list(w))
     
     current = [token_to_id.get(t, UNK_ID) for t in seed_tokens]
@@ -249,25 +245,19 @@ def generate(seed_text, max_new=30, temperature=0.8):
             break
         current.append(next_id)
 
-    # 词级拼接：正确处理 ' 作为独立 token
     tokens = [id_to_token[i] for i in current]
     result = ""
     for t in tokens:
         if t == "'":
-            # 直接拼接，不加空格
             result += t
         elif len(t) == 1 and t.isalpha():
-            # 单字母，检查前后是否需要空格
             result += t
         else:
-            # 普通词，前面加空格
             result += " " + t
     
-    # 后处理：清理多余空格
     result = result.strip()
     result = " ".join(result.split())
     
-    # 修复常见的标点粘连
     result = result.replace(" ' ", "'")
     result = result.replace(" ,", ",")
     result = result.replace(" .", ".")
@@ -275,8 +265,6 @@ def generate(seed_text, max_new=30, temperature=0.8):
     result = result.replace(" ?", "?")
     result = result.replace(" ;", ";")
     result = result.replace(" :", ":")
-    result = result.replace("( ", "(")
-    result = result.replace(" )", ")")
     
     return result
 
