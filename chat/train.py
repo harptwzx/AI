@@ -97,12 +97,12 @@ train_steps = max(1, len(train_lines) // BATCH_SIZE)
 val_steps = max(1, len(val_lines) // BATCH_SIZE)
 print(f"训练步数/epoch: {train_steps}, 验证步数/epoch: {val_steps}")
 
-# ============ 标签平滑损失 ============
+# ============ 修复：标签平滑损失 ============
 def smoothed_loss(y_true, y_pred, smoothing=0.1):
-    num_classes = tf.cast(tf.shape(y_pred)[-1], y_pred.dtype)
+    num_classes = tf.shape(y_pred)[-1]  # int32，不转换
     y_true = tf.cast(y_true, tf.int32)
     one_hot = tf.one_hot(y_true, num_classes)
-    smoothed = one_hot * (1.0 - smoothing) + smoothing / num_classes
+    smoothed = one_hot * (1.0 - smoothing) + smoothing / tf.cast(num_classes, tf.float32)
     return tf.keras.losses.categorical_crossentropy(smoothed, y_pred)
 
 # ============ 保持原结构的模型，只加 Dropout ============
@@ -206,7 +206,7 @@ callbacks = [
 history = model.fit(
     train_ds,
     validation_data=val_ds,
-    epochs=10,
+    epochs=50,
     steps_per_epoch=train_steps,
     validation_steps=val_steps,
     callbacks=callbacks,
