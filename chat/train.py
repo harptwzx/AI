@@ -59,8 +59,10 @@ def text_generator(file_path):
     for i in range(0, len(all_tokens) - SEQ_LEN, stride):
         chunk = all_tokens[i:i + SEQ_LEN]
         ids = [token_to_id.get(t, UNK_ID) for t in chunk]
+
         if len(ids) < SEQ_LEN:
             ids += [PAD_ID] * (SEQ_LEN - len(ids))
+
         yield ids[:-1], ids[1:]
 
 with open("processed.txt", "r", encoding="utf-8") as f:
@@ -97,15 +99,7 @@ train_steps = max(1, len(train_lines) // BATCH_SIZE)
 val_steps = max(1, len(val_lines) // BATCH_SIZE)
 print(f"训练步数/epoch: {train_steps}, 验证步数/epoch: {val_steps}")
 
-# ============ 修复：标签平滑损失 ============
-def smoothed_loss(y_true, y_pred, smoothing=0.1):
-    num_classes = tf.shape(y_pred)[-1]  # int32，不转换
-    y_true = tf.cast(y_true, tf.int32)
-    one_hot = tf.one_hot(y_true, num_classes)
-    smoothed = one_hot * (1.0 - smoothing) + smoothing / tf.cast(num_classes, tf.float32)
-    return tf.keras.losses.categorical_crossentropy(smoothed, y_pred)
-
-# ============ 保持原结构的模型，只加 Dropout ============
+# ============ 模型结构（保持原样，只加 Dropout） ============
 def build_model(vocab_size, seq_len, embed_dim=256, num_heads=8, ff_dim=512, num_layers=4, dropout_rate=0.1):
     inputs = layers.Input(shape=(seq_len - 1,))
     
@@ -154,7 +148,7 @@ print("\n========== 开始训练 ==========")
 
 model.compile(
     optimizer=keras.optimizers.AdamW(learning_rate=0.001, weight_decay=0.01),
-    loss=smoothed_loss,
+    loss="sparse_categorical_crossentropy",  # 直接用标准损失，不再折腾标签平滑
     metrics=["accuracy"]
 )
 
@@ -227,36 +221,67 @@ for tmp in ["processed_train.tmp", "processed_val.tmp"]:
     if os.path.exists(tmp):
         os.remove(tmp)
 
+# ============ 生成测试（适配词级 token + 标点处理） ============
 def generate(seed_text, max_new=30, temperature=0.8):
+    # 种子文本按词表切分
     seed_tokens = []
     for w in seed_text.lower().split():
         if w in vocab:
             seed_tokens.append(w)
         else:
+            # 尝试拆成字符
             seed_tokens.extend(list(w))
+    
     current = [token_to_id.get(t, UNK_ID) for t in seed_tokens]
+
     for _ in range(max_new):
         padded = current[-(SEQ_LEN-1):]
         padded = [PAD_ID] * ((SEQ_LEN-1) - len(padded)) + padded
+
         pred = model.predict(np.array([padded]), verbose=0)
         logits = pred[0, -1, :] / temperature
         logits = logits - np.max(logits)
         probs = np.exp(logits)
         probs = probs / np.sum(probs)
         next_id = np.random.choice(VOCAB_SIZE, p=probs)
+
         if next_id == EOS_ID:
             break
         current.append(next_id)
+
+    # 词级拼接：正确处理 ' 作为独立 token
     tokens = [id_to_token[i] for i in current]
     result = ""
     for t in tokens:
-        if len(t) == 1 and t.isalpha():
+        if t == "'":
+            # 直接拼接，不加空格
+            result += t
+        elif len(t) == 1 and t.isalpha():
+            # 单字母，检查前后是否需要空格
             result += t
         else:
-            result += " " + t + " "
-    return " ".join(result.split())
+            # 普通词，前面加空格
+            result += " " + t
+    
+    # 后处理：清理多余空格
+    result = result.strip()
+    result = " ".join(result.split())
+    
+    # 修复常见的标点粘连
+    result = result.replace(" ' ", "'")
+    result = result.replace(" ,", ",")
+    result = result.replace(" .", ".")
+    result = result.replace(" !", "!")
+    result = result.replace(" ?", "?")
+    result = result.replace(" ;", ";")
+    result = result.replace(" :", ":")
+    result = result.replace("( ", "(")
+    result = result.replace(" )", ")")
+    
+    return result
 
 print("\n--- 生成测试 ---")
 print(generate("the cat sat on the"))
 print(generate("in the morning i went to"))
 print(generate("she opened the door and"))
+print(generate("harry potter and the"))
