@@ -7,6 +7,9 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 
+# 确保保存目录存在
+os.makedirs("saved_model", exist_ok=True)
+
 # 中断保存
 save_path = "saved_model/interrupted_v2.keras"
 def save_on_interrupt(signum, frame):
@@ -70,16 +73,83 @@ with open("processed.txt", "r", encoding="utf-8") as f:
 steps = total_lines // BATCH_SIZE
 print(f"每轮步数: {steps}")
 
-# ============ 加载已有模型（关键！） ============
-print("\n========== 加载已有模型 ==========")
-model = keras.models.load_model("saved_model/phase1_lm.keras")
-model.summary()
-print(f"总参数量: {model.count_params():,}")
+# ============ 加载或创建模型 ============
+MODEL_PATH = "saved_model/phase1_lm.keras"
+
+if os.path.isfile(MODEL_PATH):
+    print("\n========== 加载已有模型 ==========")
+    model = keras.models.load_model(MODEL_PATH)
+    model.summary()
+    print(f"总参数量: {model.count_params():,}")
+else:
+    print("\n========== 创建新模型 ==========")
+    
+    # 构建 Transformer 语言模型
+    def build_model(vocab_size, seq_len, embed_dim=256, num_heads=8, ff_dim=512, num_layers=4):
+        inputs = layers.Input(shape=(seq_len - 1,))
+        
+        # 词嵌入 + 位置编码
+        x = layers.Embedding(vocab_size, embed_dim)(inputs)
+        pos_encoding = layers.Embedding(seq_len - 1, embed_dim)(tf.range(seq_len - 1))
+        x = x + pos_encoding
+        
+        # Transformer 编码器层
+        for _ in range(num_layers):
+            # 多头自注意力
+            attn_output = layers.MultiHeadAttention(
+                num_heads=num_heads, 
+                key_dim=embed_dim // num_heads
+            )(x, x, use_causal_mask=True)
+            x = layers.LayerNormalization(epsilon=1e-6)(x + attn_output)
+            
+            # 前馈网络
+            ff_output = layers.Dense(ff_dim, activation="relu")(x)
+            ff_output = layers.Dense(embed_dim)(ff_output)
+            x = layers.LayerNormalization(epsilon=1e-6)(x + ff_output)
+        
+        # 输出层
+        outputs = layers.Dense(vocab_size, activation="softmax")(x)
+        
+        model = keras.Model(inputs, outputs)
+        return model
+    
+    model = build_model(VOCAB_SIZE, SEQ_LEN)
+    model.summary()
+    print(f"总参数量: {model.count_params():,}")
+    
+    # 首次训练（phase 1）
+    print("\n========== 开始首次训练 ==========")
+    model.compile(
+        optimizer=keras.optimizers.Adam(learning_rate=0.001),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+    
+    model.fit(
+        dataset,
+        epochs=10,
+        steps_per_epoch=steps,
+        callbacks=[
+            keras.callbacks.ModelCheckpoint(
+                "saved_model/phase1_lm.keras", 
+                save_best_only=True, 
+                monitor="loss"
+            ),
+            keras.callbacks.ReduceLROnPlateau(
+                factor=0.5, 
+                patience=2, 
+                monitor="loss", 
+                min_lr=1e-6
+            )
+        ]
+    )
+    
+    print("\n首次训练完成，模型已保存！")
 
 # ============ 继续训练 ============
 print("\n========== 开始继续训练 ==========")
 model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=0.0002),  # 学习率调小
+    optimizer=keras.optimizers.Adam(learning_rate=0.0002),
     loss="sparse_categorical_crossentropy",
     metrics=["accuracy"]
 )
@@ -95,7 +165,6 @@ model.fit(
     ]
 )
 
-os.makedirs("saved_model", exist_ok=True)
 model.save("saved_model/phase1_lm_v2.keras")
 model.save("saved_model/phase1_lm_v2.h5")
 
