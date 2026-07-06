@@ -200,7 +200,7 @@ callbacks = [
 history = model.fit(
     train_ds,
     validation_data=val_ds,
-    epochs=50,
+    epochs=10,
     steps_per_epoch=train_steps,
     validation_steps=val_steps,
     callbacks=callbacks,
