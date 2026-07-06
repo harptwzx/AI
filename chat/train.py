@@ -258,5 +258,5 @@ def generate(seed_text, max_new=30, temperature=0.8):
 
 print("\n--- 生成测试 ---")
 print(generate("the cat sat on the"))
-print(generate("he thinks apples are"))
-print(generate("she opened the window and "))
+print(generate("in the morning i went to"))
+print(generate("she opened the door and"))
