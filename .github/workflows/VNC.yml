@@ -106,7 +106,7 @@ jobs:
           echo "输入 exit 断开 SSH 后会自动关闭..."
           echo ""
           
-          for i in $(seq 1 360); do
+          for i in $(seq 1 1800); do
             BORE_PORT=$(grep -oP 'listening at bore.pub:\K\d+' bore.log 2>/dev/null | head -1)
             
             echo ""
