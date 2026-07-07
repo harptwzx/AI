@@ -2,91 +2,99 @@
 
 纯 TensorFlow 实现，不依赖任何外部模型框架。
 
-## 项目结构
+## 快速开始（三步搞定）
 
-```
-.
-├── data/
-│   ├── raw/              # 原始数据（手动下载）
-│   │   ├── tatoeba/
-│   │   ├── openwebtext/
-│   │   ├── wikipedia/
-│   │   ├── gutenberg/
-│   │   └── c4/
-│   ├── processed/        # 预处理后的数据
-│   │   ├── train.txt
-│   │   └── val.txt
-│   └── tokenizer/        # Tokenizer 文件
-│       ├── vocab.json
-│       ├── merges.txt
-│       └── tokenizer_config.json
-├── models/
-│   ├── checkpoints/      # 定期保存的检查点
-│   ├── best_model/       # 验证集上最好的模型
-│   └── final_model/      # 最终模型
-├── logs/                 # TensorBoard 日志
-├── config.json           # 训练配置
-├── data_downloader.py    # 数据下载说明
-├── data_processor.py     # 数据预处理
-├── tokenizer.py          # BPE Tokenizer
-├── model.py              # Transformer 模型
-├── train.py              # 训练脚本
-├── generate.py           # 文本生成
-├── run_pipeline.py       # 一键运行
-└── requirements.txt      # 依赖
-```
-
-## 快速开始
-
-### 1. 安装依赖
+### 第一步：安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 下载数据
-
-运行 `data_downloader.py` 查看下载说明，然后手动下载数据到 `data/raw/` 对应目录：
+### 第二步：下载数据（全自动）
 
 ```bash
-python data_downloader.py
+# 自动下载所有数据（Tatoeba + Gutenberg + Wikipedia 样本 + 示例数据）
+python download_data.py --all
+
+# 或单独下载某个数据集
+python download_data.py --tatoeba
+python download_data.py --gutenberg
 ```
 
-推荐下载：
-- **Tatoeba** (https://tatoeba.org/en/downloads) — 语法规范
-- **OpenWebText** (https://skylion007.github.io/OpenWebTextCorpus/) — 语料丰富
-- **Wikipedia** (https://dumps.wikimedia.org/enwiki/latest/) — 知识密集
+**下载说明：**
+- **Tatoeba**: 自动下载 (~50MB)，语法规范的英语例句
+- **Gutenberg**: 自动下载 5 本经典公版书
+- **Wikipedia**: 自动下载 Simple English 版 (~100MB)
+- **OpenWebText/C4**: 提供下载链接，需要手动下载完整版（文件太大）
 
-### 3. 一键运行完整流程
+### 第三步：处理数据 → 训练 Tokenizer → 训练模型
 
 ```bash
-# 全部流程：数据处理 -> Tokenizer 训练 -> 模型训练
+# 1. 处理数据（生成 train.txt / val.txt）
+python process_data.py
+
+# 2. 训练 Tokenizer（生成 vocab.json + merges.txt）
+python build_tokenizer.py
+
+# 3. 训练模型
+python train.py
+
+# 或一键运行全部
 python run_pipeline.py --stage all
-
-# 或分步执行
-python run_pipeline.py --stage data       # 仅数据预处理
-python run_pipeline.py --stage tokenizer  # 仅训练 Tokenizer
-python run_pipeline.py --stage train      # 仅训练模型
 ```
 
-### 4. 断点续训
+## 断点续训
 
 ```bash
 # 从检查点继续训练
-python run_pipeline.py --stage train --resume ./models/checkpoints/checkpoint_epoch_010
-
-# 或直接用 train.py
 python train.py --resume ./models/checkpoints/checkpoint_epoch_010
 ```
 
-### 5. 文本生成
+## 文本生成
 
 ```bash
 # 交互式对话
 python generate.py --model ./models/best_model --tokenizer ./data/tokenizer
 
 # 单次生成
-python generate.py --model ./models/best_model --prompt "Once upon a time" --max-tokens 50
+python generate.py --model ./models/best_model --prompt "Hello" --max-tokens 50
+```
+
+## 项目结构
+
+```
+.
+├── data/
+│   ├── raw/              # 原始数据（自动下载）
+│   │   ├── tatoeba/sentences.csv
+│   │   ├── gutenberg/*.txt
+│   │   ├── wikipedia/*.xml.bz2
+│   │   ├── openwebtext/
+│   │   └── c4/
+│   ├── processed/        # 处理后的数据
+│   │   ├── train.txt
+│   │   └── val.txt
+│   └── tokenizer/        # Tokenizer 文件
+│       ├── vocab.json
+│       ├── merges.txt
+│       ├── tokenizer_config.json
+│       └── vocab_readable.txt  # 可读的 token 对照表
+├── models/
+│   ├── checkpoints/      # 定期保存的检查点
+│   ├── best_model/       # 验证集上最好的模型
+│   └── final_model/      # 最终模型
+├── logs/                 # TensorBoard 日志
+├── config.json           # 训练配置
+├── download_data.py      # 自动下载数据
+├── process_data.py       # 数据处理
+├── build_tokenizer.py    # 训练 Tokenizer
+├── tokenizer.py          # BPE Tokenizer 实现
+├── model.py              # Transformer 模型
+├── train.py              # 训练脚本
+├── generate.py           # 文本生成
+├── run_pipeline.py       # 一键运行
+├── requirements.txt      # 依赖
+└── README.md             # 本文件
 ```
 
 ## 训练配置
@@ -121,13 +129,26 @@ python generate.py --model ./models/best_model --prompt "Once upon a time" --max
 ## 防止过拟合
 
 - **Early Stopping**: 验证 loss 5 个 epoch 不改善则停止
-- **Dropout**: 模型中已内置
+- **Dropout**: 模型中已内置 (rate=0.1)
 - **验证集**: 自动划分 5% 数据用于验证
 - **学习率衰减**: Warmup + Cosine Decay
 
-## Tokenizer 文件
+## Tokenizer 文件说明
 
-训练完成后会在 `data/tokenizer/` 生成：
-- `vocab.json`: `{token_id: token_str}` 对照表
-- `merges.txt`: BPE 合并规则
+训练完成后在 `data/tokenizer/` 生成：
+- `vocab.json`: `{token_id: token_str}` 对照表（JSON 格式）
+- `merges.txt`: BPE 合并规则（每行一个 pair）
 - `tokenizer_config.json`: 配置信息
+- `vocab_readable.txt`: **可读的 token 对照表**（纯文本，方便查看）
+
+## 大型数据集手动下载
+
+如果自动下载的数据不够，可以手动下载完整版：
+
+| 数据集 | 下载地址 | 大小 |
+|--------|---------|------|
+| OpenWebText | https://huggingface.co/datasets/Skylion007/openwebtext | ~13GB |
+| Wikipedia | https://dumps.wikimedia.org/enwiki/latest/ | ~20GB |
+| C4 | https://huggingface.co/datasets/allenai/c4 | ~800GB |
+
+下载后放入 `data/raw/` 对应目录，再运行 `process_data.py` 即可。
