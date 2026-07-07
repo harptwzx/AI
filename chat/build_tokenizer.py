@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-全自动 Tokenizer 训练脚本
-==========================
-从 train.txt 训练 BPE Tokenizer，生成 vocab.json + merges.txt
+Tokenizer 训练脚本
+==================
+从 train.txt 训练 BPE Tokenizer
 
 用法:
-    python build_tokenizer.py              # 使用默认配置
-    python build_tokenizer.py --vocab 16000 --sample 200000
+    python build_tokenizer.py              # 默认 32000 vocab
+    python build_tokenizer.py --vocab 16000 --sample 100000
 """
 
 import os
@@ -15,14 +15,12 @@ import argparse
 import json
 import time
 import random
-from typing import List, Dict, Tuple
 
-# 将项目根目录加入路径，导入 tokenizer 模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tokenizer import BPETokenizer
 
 
-def load_train_text(filepath: str, max_lines: int = None) -> List[str]:
+def load_train_text(filepath: str, max_lines: int = None) -> list:
     """加载训练文本"""
     print(f"[Data] 加载 {filepath}...")
 
@@ -40,11 +38,7 @@ def load_train_text(filepath: str, max_lines: int = None) -> List[str]:
     return lines
 
 
-def train_tokenizer(
-    texts: List[str],
-    vocab_size: int = 32000,
-    save_dir: str = "./data/tokenizer"
-):
+def train_tokenizer(texts: list, vocab_size: int = 32000, save_dir: str = "./data/tokenizer"):
     """训练 BPE Tokenizer"""
     print("\n" + "=" * 60)
     print("Tokenizer 训练")
@@ -55,7 +49,7 @@ def train_tokenizer(
     all_text = "\n".join(texts)
     print(f"[Tokenizer] 总字符数: {len(all_text):,}")
 
-    # 创建并训练 tokenizer
+    # 创建并训练
     tokenizer = BPETokenizer(vocab_size=vocab_size)
 
     start_time = time.time()
@@ -71,17 +65,18 @@ def train_tokenizer(
         "The quick brown fox jumps over the lazy dog.",
         "Machine learning is fascinating.",
         "To be or not to be, that is the question.",
+        "I love learning English every day.",
     ]
 
     for text in test_sentences:
         encoded = tokenizer.encode(text)
         decoded = tokenizer.decode(encoded)
         print(f"  原文: {text}")
-        print(f"  编码: {encoded[:20]}{'...' if len(encoded) > 20 else ''}")
+        print(f"  编码: {encoded[:15]}{'...' if len(encoded) > 15 else ''}")
         print(f"  解码: {decoded}")
         print()
 
-    # 保存 token 对照表（纯文本版，方便查看）
+    # 保存可读 vocab 表
     vocab_txt_path = os.path.join(save_dir, "vocab_readable.txt")
     with open(vocab_txt_path, "w", encoding="utf-8") as f:
         f.write(f"# Tokenizer Vocab\n")
@@ -94,8 +89,12 @@ def train_tokenizer(
 
         for token_id in sorted(tokenizer.vocab.keys()):
             token_str = tokenizer.vocab[token_id]
-            token_type = "BYTE" if token_id < 256 else "MERGE" if token_id < vocab_size else "SPECIAL"
-            # 处理不可见字符
+            if token_id < 256:
+                token_type = "BYTE"
+            elif token_id < vocab_size:
+                token_type = "MERGE"
+            else:
+                token_type = "SPECIAL"
             display_str = repr(token_str) if any(ord(c) < 32 for c in token_str) else token_str
             f.write(f"{token_id:<8} {display_str:<30} {token_type}\n")
 
@@ -107,7 +106,7 @@ def train_tokenizer(
 def main():
     parser = argparse.ArgumentParser(description="训练 Tokenizer")
     parser.add_argument("--vocab", type=int, default=32000, help="词表大小")
-    parser.add_argument("--sample", type=int, default=None, help="采样句子数（默认全部）")
+    parser.add_argument("--sample", type=int, default=None, help="采样句子数")
     parser.add_argument("--save-dir", type=str, default="./data/tokenizer", help="保存目录")
     parser.add_argument("--data", type=str, default="./data/processed/train.txt", help="训练数据路径")
 
@@ -117,28 +116,20 @@ def main():
     print("  English ChatAI — Tokenizer 训练")
     print("=" * 60)
 
-    # 检查数据是否存在
     if not os.path.exists(args.data):
         print(f"[ERROR] 未找到 {args.data}")
         print("[HINT] 请先运行: python process_data.py")
         return
 
-    # 加载文本
     texts = load_train_text(args.data, max_lines=args.sample)
-
-    # 训练
-    tokenizer = train_tokenizer(
-        texts=texts,
-        vocab_size=args.vocab,
-        save_dir=args.save_dir
-    )
+    tokenizer = train_tokenizer(texts, vocab_size=args.vocab, save_dir=args.save_dir)
 
     print("\n" + "=" * 60)
     print("[OK] Tokenizer 训练完成！")
-    print(f"  vocab.json: {args.save_dir}/vocab.json")
-    print(f"  merges.txt: {args.save_dir}/merges.txt")
-    print(f"  tokenizer_config.json: {args.save_dir}/tokenizer_config.json")
-    print(f"  vocab_readable.txt: {args.save_dir}/vocab_readable.txt")
+    print(f"  vocab.json:              {args.save_dir}/vocab.json")
+    print(f"  merges.txt:              {args.save_dir}/merges.txt")
+    print(f"  tokenizer_config.json:   {args.save_dir}/tokenizer_config.json")
+    print(f"  vocab_readable.txt:      {args.save_dir}/vocab_readable.txt")
     print("=" * 60)
 
 

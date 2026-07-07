@@ -10,27 +10,33 @@
 pip install -r requirements.txt
 ```
 
-### 第二步：下载数据（全自动）
+### 第二步：下载数据（全自动，约 25MB）
 
 ```bash
-# 自动下载所有数据（Tatoeba + Gutenberg + Wikipedia 样本 + 示例数据）
-python download_data.py --all
-
-# 或单独下载某个数据集
-python download_data.py --tatoeba
-python download_data.py --gutenberg
+python download_data.py
 ```
 
-**下载说明：**
-- **Tatoeba**: 自动下载 (~50MB)，语法规范的英语例句
-- **Gutenberg**: 自动下载 5 本经典公版书
-- **Wikipedia**: 自动下载 Simple English 版 (~100MB)
-- **OpenWebText/C4**: 提供下载链接，需要手动下载完整版（文件太大）
+这会从 ManyThings.org 自动下载 10 个英语句子数据集：
+- English-German (~7.4MB, 20万句)
+- English-French (~5.2MB, 19万句)
+- English-Spanish (~3.8MB, 14万句)
+- English-Japanese (~2.2MB, 5万句)
+- English-Russian (~2.8MB, 50万句)
+- English-Portuguese (~2.0MB, 4万句)
+- English-Italian (~1.8MB, 3.5万句)
+- English-Korean (~1.5MB, 2.5万句)
+- English-Dutch (~1.2MB, 2万句)
+- English-Chinese (~1.0MB, 1.5万句)
+
+**特点：**
+- 句子简短、语法规范（来自 Tatoeba 项目，经人工校对）
+- 适合训练语法和语感
+- 自动断点续传，下载失败自动重试
 
 ### 第三步：处理数据 → 训练 Tokenizer → 训练模型
 
 ```bash
-# 1. 处理数据（生成 train.txt / val.txt）
+# 1. 处理数据（提取英语句子，生成 train.txt / val.txt）
 python process_data.py
 
 # 2. 训练 Tokenizer（生成 vocab.json + merges.txt）
@@ -65,36 +71,36 @@ python generate.py --model ./models/best_model --prompt "Hello" --max-tokens 50
 ```
 .
 ├── data/
-│   ├── raw/              # 原始数据（自动下载）
-│   │   ├── tatoeba/sentences.csv
-│   │   ├── gutenberg/*.txt
-│   │   ├── wikipedia/*.xml.bz2
-│   │   ├── openwebtext/
-│   │   └── c4/
-│   ├── processed/        # 处理后的数据
+│   ├── raw/
+│   │   └── manythings/          # ManyThings 原始数据
+│   │       ├── eng_deu/deu.txt
+│   │       ├── eng_fra/fra.txt
+│   │       ├── eng_spa/spa.txt
+│   │       └── ...
+│   ├── processed/               # 处理后的数据
 │   │   ├── train.txt
 │   │   └── val.txt
-│   └── tokenizer/        # Tokenizer 文件
+│   └── tokenizer/               # Tokenizer 文件
 │       ├── vocab.json
 │       ├── merges.txt
 │       ├── tokenizer_config.json
-│       └── vocab_readable.txt  # 可读的 token 对照表
+│       └── vocab_readable.txt   # 可读的 token 对照表
 ├── models/
-│   ├── checkpoints/      # 定期保存的检查点
-│   ├── best_model/       # 验证集上最好的模型
-│   └── final_model/      # 最终模型
-├── logs/                 # TensorBoard 日志
-├── config.json           # 训练配置
-├── download_data.py      # 自动下载数据
-├── process_data.py       # 数据处理
-├── build_tokenizer.py    # 训练 Tokenizer
-├── tokenizer.py          # BPE Tokenizer 实现
-├── model.py              # Transformer 模型
-├── train.py              # 训练脚本
-├── generate.py           # 文本生成
-├── run_pipeline.py       # 一键运行
-├── requirements.txt      # 依赖
-└── README.md             # 本文件
+│   ├── checkpoints/             # 定期保存的检查点
+│   ├── best_model/              # 验证集上最好的模型
+│   └── final_model/             # 最终模型
+├── logs/                        # TensorBoard 日志
+├── config.json                  # 训练配置
+├── download_data.py             # 自动下载 ManyThings 数据
+├── process_data.py              # 数据处理
+├── build_tokenizer.py           # 训练 Tokenizer
+├── tokenizer.py                 # BPE Tokenizer 实现
+├── model.py                     # Transformer 模型
+├── train.py                     # 训练脚本
+├── generate.py                  # 文本生成
+├── run_pipeline.py              # 一键运行
+├── requirements.txt             # 依赖
+└── README.md                    # 本文件
 ```
 
 ## 训练配置
@@ -135,20 +141,8 @@ python generate.py --model ./models/best_model --prompt "Hello" --max-tokens 50
 
 ## Tokenizer 文件说明
 
-训练完成后在 `data/tokenizer/` 生成：
+运行 `build_tokenizer.py` 后在 `data/tokenizer/` 生成：
 - `vocab.json`: `{token_id: token_str}` 对照表（JSON 格式）
 - `merges.txt`: BPE 合并规则（每行一个 pair）
 - `tokenizer_config.json`: 配置信息
-- `vocab_readable.txt`: **可读的 token 对照表**（纯文本，方便查看）
-
-## 大型数据集手动下载
-
-如果自动下载的数据不够，可以手动下载完整版：
-
-| 数据集 | 下载地址 | 大小 |
-|--------|---------|------|
-| OpenWebText | https://huggingface.co/datasets/Skylion007/openwebtext | ~13GB |
-| Wikipedia | https://dumps.wikimedia.org/enwiki/latest/ | ~20GB |
-| C4 | https://huggingface.co/datasets/allenai/c4 | ~800GB |
-
-下载后放入 `data/raw/` 对应目录，再运行 `process_data.py` 即可。
+- **`vocab_readable.txt`**: **纯文本可读版**，方便查看每个 token 是什么
