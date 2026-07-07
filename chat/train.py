@@ -1,279 +1,426 @@
-import json
+"""
+训练脚本
+========
+功能:
+- 从 SaveModel 格式加载已有模型继续训练
+- 每 epoch 保存检查点
+- 保存验证集上表现最好的模型
+- Early Stopping 防止过拟合
+- TensorBoard 日志
+"""
+
 import os
-import signal
-import sys
+import json
+import time
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
 import numpy as np
+from datetime import datetime
 
-os.makedirs("saved_model", exist_ok=True)
+from model import GPTModel, WarmupCosineDecay, count_parameters
+from tokenizer import BPETokenizer
 
-best_weights = None
-best_val_loss = float('inf')
-current_epoch = 0
 
-save_path = "saved_model/interrupted_best.keras"
+# ============================================================
+# 配置
+# ============================================================
+class TrainingConfig:
+    """训练配置"""
 
-def save_on_interrupt(signum, frame):
-    global best_weights, best_val_loss, current_epoch
-    print(f"\n\n⚠️  训练被中断 (Epoch {current_epoch})")
-    if best_weights is not None:
-        print(f"保存历史最佳模型 (val_loss={best_val_loss:.4f})...")
-        model.set_weights(best_weights)
-        model.save(save_path)
-        print("✅ 完成")
-    else:
-        model.save(save_path)
-        print("✅ 已保存当前模型")
-    sys.exit(0)
+    # 模型配置
+    vocab_size = 32000
+    d_model = 512
+    num_heads = 8
+    num_layers = 6
+    dff = 2048
+    max_seq_len = 256
+    dropout_rate = 0.1
 
-signal.signal(signal.SIGINT, save_on_interrupt)
+    # 训练配置
+    batch_size = 32
+    epochs = 100  # 最大 epoch 数（会被 early stopping 打断）
+    learning_rate = 3e-4
+    warmup_steps = 2000
+    max_train_steps = 500000
 
-with open("vocab.json", "r", encoding="utf-8") as f:
-    vocab = json.load(f)
+    # 早停配置
+    early_stopping_patience = 5  # 验证 loss 不改善的 patience
+    early_stopping_min_delta = 0.001
 
-token_to_id = vocab
-id_to_token = {v: k for k, v in vocab.items()}
+    # 保存配置
+    save_best_only = True
+    checkpoint_freq = 1  # 每 N 个 epoch 保存一次
 
-VOCAB_SIZE = len(vocab)
-PAD_ID = token_to_id["<|pad|>"]
-EOS_ID = token_to_id["<|eos|>"]
-UNK_ID = token_to_id["<|unk|>"]
+    # 路径配置
+    model_dir = "./models"
+    checkpoint_dir = "./models/checkpoints"
+    best_model_dir = "./models/best_model"
+    log_dir = "./logs"
+    tokenizer_dir = "./data/tokenizer"
+    train_data_path = "./data/processed/train.txt"
+    val_data_path = "./data/processed/val.txt"
 
-SEQ_LEN = 64          # 缩短序列长度，更适合语感（短句模式）
-BATCH_SIZE = 16       # 小batch，更多梯度更新
 
-print(f"词表大小: {VOCAB_SIZE}")
+# ============================================================
+# 数据管道
+# ============================================================
+class TextDataPipeline:
+    """文本数据管道"""
 
-def text_generator(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
-        all_tokens = []
-        for line in f:
-            tokens = line.strip().split()
-            if len(tokens) > 0:
-                all_tokens.extend(tokens)
-                all_tokens.append("<|eos|>")
+    def __init__(self, tokenizer: BPETokenizer, seq_len: int, batch_size: int):
+        self.tokenizer = tokenizer
+        self.seq_len = seq_len
+        self.batch_size = batch_size
 
-    stride = 8          # 小步长，更多训练样本
-    for i in range(0, len(all_tokens) - SEQ_LEN, stride):
-        chunk = all_tokens[i:i + SEQ_LEN]
-        ids = [token_to_id.get(t, UNK_ID) for t in chunk]
+    def load_text_file(self, filepath: str) -> list:
+        """加载文本文件"""
+        print(f"[Data] 加载 {filepath}...")
+        with open(filepath, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+        print(f"[Data] 共 {len(lines):,} 行")
+        return lines
 
-        if len(ids) < SEQ_LEN:
-            ids += [PAD_ID] * (SEQ_LEN - len(ids))
+    def create_dataset(self, texts: list, shuffle: bool = True, buffer_size: int = 10000):
+        """
+        创建 tf.data.Dataset
 
-        yield ids[:-1], ids[1:]
+        将文本编码为 token ids，然后创建 (input, target) 对
+        target 是 input 向右偏移一位（next token prediction）
+        """
+        print("[Data] 编码文本...")
+        all_ids = []
+        for text in texts:
+            ids = self.tokenizer.encode(text)
+            # 添加 endoftext token
+            ids.append(self.tokenizer.special_tokens["<|endoftext|>"])
+            all_ids.extend(ids)
 
-with open("processed.txt", "r", encoding="utf-8") as f:
-    all_lines = f.readlines()
+        print(f"[Data] 总 token 数: {len(all_ids):,}")
 
-# 语感阶段：不用验证集，全部数据训练
-# 或者只用最后 5% 做快速验证
-split_idx = int(len(all_lines) * 0.95)
-train_lines = all_lines[:split_idx]
-val_lines = all_lines[split_idx:]
+        # 创建滑动窗口样本
+        def gen():
+            for i in range(0, len(all_ids) - self.seq_len):
+                x = all_ids[i : i + self.seq_len]
+                y = all_ids[i + 1 : i + self.seq_len + 1]
+                yield x, y
 
-with open("processed_train.tmp", "w", encoding="utf-8") as f:
-    f.writelines(train_lines)
-with open("processed_val.tmp", "w", encoding="utf-8") as f:
-    f.writelines(val_lines)
-
-def make_dataset(file_path, shuffle=False):
-    ds = tf.data.Dataset.from_generator(
-        lambda: text_generator(file_path),
-        output_signature=(
-            tf.TensorSpec(shape=(SEQ_LEN - 1,), dtype=tf.int32),
-            tf.TensorSpec(shape=(SEQ_LEN - 1,), dtype=tf.int32)
+        dataset = tf.data.Dataset.from_generator(
+            gen,
+            output_signature=(
+                tf.TensorSpec(shape=(self.seq_len,), dtype=tf.int32),
+                tf.TensorSpec(shape=(self.seq_len,), dtype=tf.int32),
+            ),
         )
-    )
-    if shuffle:
-        ds = ds.shuffle(buffer_size=50000)
-    return ds.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
 
-train_ds = make_dataset("processed_train.tmp", shuffle=True)
-val_ds = make_dataset("processed_val.tmp", shuffle=False)
+        if shuffle:
+            dataset = dataset.shuffle(buffer_size)
 
-# 计算实际步数
-with open("processed_train.tmp", "r", encoding="utf-8") as f:
-    train_tokens = sum(len(line.split()) for line in f)
-with open("processed_val.tmp", "r", encoding="utf-8") as f:
-    val_tokens = sum(len(line.split()) for line in f)
+        dataset = dataset.batch(self.batch_size, drop_remainder=True)
+        dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
-# 估算步数：总token / stride / batch
-train_steps = max(1, (train_tokens * 8) // (SEQ_LEN * BATCH_SIZE))  # 粗略估算
-val_steps = max(1, (val_tokens * 8) // (SEQ_LEN * BATCH_SIZE))
+        return dataset
 
-print(f"训练token数: {train_tokens}, 验证token数: {val_tokens}")
-print(f"训练步数/epoch: {train_steps}, 验证步数/epoch: {val_steps}")
 
-# ============ 更小模型：适合语感学习 ============
-def build_model(vocab_size, seq_len, embed_dim=32, num_heads=2, ff_dim=64, num_layers=1, dropout_rate=0.1):
-    inputs = layers.Input(shape=(seq_len - 1,))
-    
-    x = layers.Embedding(vocab_size, embed_dim)(inputs)
-    pos_encoding = layers.Embedding(seq_len - 1, embed_dim)(tf.range(seq_len - 1))
-    x = x + pos_encoding
-    x = layers.Dropout(dropout_rate)(x)
-    
-    for _ in range(num_layers):
-        attn_output = layers.MultiHeadAttention(
-            num_heads=num_heads, 
-            key_dim=embed_dim // num_heads,
-            dropout=dropout_rate
-        )(x, x, use_causal_mask=True)
-        x = layers.LayerNormalization(epsilon=1e-6)(x + attn_output)
-        x = layers.Dropout(dropout_rate)(x)
-        
-        ff_output = layers.Dense(ff_dim, activation="relu")(x)
-        ff_output = layers.Dropout(dropout_rate)(ff_output)
-        ff_output = layers.Dense(embed_dim)(ff_output)
-        x = layers.LayerNormalization(epsilon=1e-6)(x + ff_output)
-        x = layers.Dropout(dropout_rate)(x)
-    
-    x = layers.Dropout(dropout_rate)(x)
-    outputs = layers.Dense(vocab_size, activation="softmax")(x)
-    
-    return keras.Model(inputs, outputs)
+# ============================================================
+# 自定义回调
+# ============================================================
+class SaveBestModelCallback(tf.keras.callbacks.Callback):
+    """保存验证集上最好的模型（SaveModel 格式）"""
 
-# ============ 加载或创建 ============
-MODEL_PATH = "saved_model/phase1_lm.keras"
+    def __init__(self, save_dir: str, monitor: str = "val_loss", mode: str = "min"):
+        super().__init__()
+        self.save_dir = save_dir
+        self.monitor = monitor
+        self.mode = mode
+        self.best_value = float("inf") if mode == "min" else float("-inf")
+        self.best_epoch = 0
+        os.makedirs(save_dir, exist_ok=True)
 
-if os.path.isfile(MODEL_PATH):
-    print("\n========== 加载已有模型 ==========")
-    model = keras.models.load_model(MODEL_PATH)
-    model.summary()
-    print(f"总参数量: {model.count_params():,}")
-    best_weights = [w.numpy() if hasattr(w, 'numpy') else w for w in model.get_weights()]
-else:
-    print("\n========== 创建新模型 ==========")
-    model = build_model(VOCAB_SIZE, SEQ_LEN)
-    model.summary()
-    print(f"总参数量: {model.count_params():,}")
-
-# ============ 训练：语感阶段 ============
-print("\n========== 开始训练（语感阶段）==========")
-
-model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=0.001),  # 简单Adam，不用AdamW
-    loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"]
-)
-
-class SimpleTracker(keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
-        global best_weights, best_val_loss, current_epoch
-        current_epoch = epoch + 1
-        val_loss = logs.get('val_loss', float('inf'))
-        train_loss = logs.get('loss', float('inf'))
-        train_acc = logs.get('accuracy', 0)
-        
-        print(f"  Epoch {epoch+1}: train_loss={train_loss:.4f}, train_acc={train_acc:.4f}, val_loss={val_loss:.4f}")
-        
-        # 语感阶段：以训练loss为主，验证只做参考
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_weights = [w.numpy() if hasattr(w, 'numpy') else w for w in self.model.get_weights()]
-            print(f"  💾 保存最佳 (val_loss={val_loss:.4f})")
+        current = logs.get(self.monitor)
+        if current is None:
+            return
 
-callbacks = [
-    # 语感阶段：不早停，让模型充分学习
-    # keras.callbacks.EarlyStopping(monitor="loss", patience=10, restore_best_weights=False, verbose=1),
-    
-    # 学习率衰减：训练loss不降就降LR
-    keras.callbacks.ReduceLROnPlateau(
-        monitor="loss",        # 监控训练loss
-        factor=0.5,
-        patience=3,
-        min_lr=1e-5,
-        verbose=1
-    ),
-    SimpleTracker(),
-    keras.callbacks.ModelCheckpoint(
-        "saved_model/phase1_lm.keras",
-        monitor="loss",        # 保存训练loss最低的
-        save_best_only=True,
-        verbose=1
-    ),
-]
+        improved = (self.mode == "min" and current < self.best_value - 1e-7) or \
+                   (self.mode == "max" and current > self.best_value + 1e-7)
 
-history = model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=200,              # 大量epoch，让模型充分过拟合训练集（语感需要记忆）
-    steps_per_epoch=train_steps,
-    validation_steps=val_steps,
-    callbacks=callbacks,
-    verbose=1
-)
+        if improved:
+            self.best_value = current
+            self.best_epoch = epoch
 
-print("\n========== 训练结束 ==========")
-if best_weights is not None:
-    model.set_weights(best_weights)
-    print(f"已恢复最佳权重")
+            # 保存为 SaveModel 格式
+            save_path = os.path.join(self.save_dir, f"epoch_{epoch+1:03d}")
+            self.model.save(save_path, save_format="tf")
 
-model.save("saved_model/phase1_lm.keras")
-print("✅ 保存完成！")
+            # 同时保存到 best_model 目录（覆盖）
+            best_path = os.path.join(self.save_dir, "..", "best_model")
+            self.model.save(best_path, save_format="tf")
 
-for tmp in ["processed_train.tmp", "processed_val.tmp"]:
-    if os.path.exists(tmp):
-        os.remove(tmp)
+            print(f"\n[SaveBest] Epoch {epoch+1}: {self.monitor}={current:.6f} "
+                  f"(新最佳) -> 已保存到 {save_path}")
 
-# ============ 生成测试：语感验证 ============
-def generate(seed_text, max_new=20, temperature=0.6):  # 低temperature，更确定性
-    seed_tokens = []
-    for w in seed_text.lower().split():
-        if w in vocab:
-            seed_tokens.append(w)
+    def on_train_end(self, logs=None):
+        print(f"\n[SaveBest] 训练结束。最佳模型在第 {self.best_epoch+1} epoch，"
+              f"{self.monitor}={self.best_value:.6f}")
+
+
+class CheckpointCallback(tf.keras.callbacks.Callback):
+    """定期保存检查点"""
+
+    def __init__(self, save_dir: str, freq: int = 1):
+        super().__init__()
+        self.save_dir = save_dir
+        self.freq = freq
+        os.makedirs(save_dir, exist_ok=True)
+
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.freq == 0:
+            save_path = os.path.join(self.save_dir, f"checkpoint_epoch_{epoch+1:03d}")
+            self.model.save(save_path, save_format="tf")
+            print(f"[Checkpoint] Epoch {epoch+1}: 检查点已保存到 {save_path}")
+
+
+class TrainingLogger(tf.keras.callbacks.Callback):
+    """自定义训练日志"""
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.epoch_start_time = time.time()
+
+    def on_epoch_end(self, epoch, logs=None):
+        elapsed = time.time() - self.epoch_start_time
+        print(f"[Epoch {epoch+1}] loss={logs.get('loss', 0):.6f}, "
+              f"val_loss={logs.get('val_loss', 0):.6f}, "
+              f"acc={logs.get('accuracy', 0):.4f}, "
+              f"val_acc={logs.get('val_accuracy', 0):.4f}, "
+              f"time={elapsed:.1f}s")
+
+
+# ============================================================
+# 训练器
+# ============================================================
+class Trainer:
+    """模型训练器"""
+
+    def __init__(self, config: TrainingConfig):
+        self.config = config
+        self.tokenizer = None
+        self.model = None
+        self.history = None
+
+    def load_tokenizer(self):
+        """加载或训练 tokenizer"""
+        tokenizer_dir = self.config.tokenizer_dir
+
+        if os.path.exists(os.path.join(tokenizer_dir, "vocab.json")):
+            print(f"[Tokenizer] 从 {tokenizer_dir} 加载...")
+            self.tokenizer = BPETokenizer.load(tokenizer_dir)
         else:
-            seed_tokens.extend(list(w))
-    
-    current = [token_to_id.get(t, UNK_ID) for t in seed_tokens]
+            print("[Tokenizer] 未找到已有 tokenizer，需要训练...")
+            # 这里需要训练数据，实际运行时从 train.txt 加载
+            print("[Tokenizer] 请先运行 tokenizer.py 训练 tokenizer")
+            raise FileNotFoundError("Tokenizer 文件未找到")
 
-    for _ in range(max_new):
-        padded = current[-(SEQ_LEN-1):]
-        padded = [PAD_ID] * ((SEQ_LEN-1) - len(padded)) + padded
+        return self.tokenizer
 
-        pred = model.predict(np.array([padded]), verbose=0)
-        
-        logits = pred[0, -1, :]
-        if len(logits) != VOCAB_SIZE:
-            logits = np.pad(logits, (0, max(0, VOCAB_SIZE - len(logits))), constant_values=-1e10)[:VOCAB_SIZE]
-        
-        logits = logits / temperature
-        logits = logits - np.max(logits)
-        probs = np.exp(logits)
-        probs = probs / np.sum(probs)
-        
-        next_id = np.random.choice(VOCAB_SIZE, p=probs)
+    def build_model(self, from_checkpoint: str = None):
+        """
+        构建或加载模型
 
-        if next_id == EOS_ID:
-            break
-        current.append(next_id)
-
-    tokens = [id_to_token[i] for i in current]
-    result = ""
-    for t in tokens:
-        if t == "'":
-            result += t
-        elif len(t) == 1 and t.isalpha():
-            result += t
+        Args:
+            from_checkpoint: 已有 SaveModel 路径，None 则创建新模型
+        """
+        if from_checkpoint and os.path.exists(from_checkpoint):
+            print(f"[Model] 从检查点加载: {from_checkpoint}")
+            self.model = tf.keras.models.load_model(
+                from_checkpoint,
+                custom_objects={
+                    "GPTModel": GPTModel,
+                    "PositionalEncoding": __import__("model").PositionalEncoding,
+                    "MultiHeadAttention": __import__("model").MultiHeadAttention,
+                    "FeedForward": __import__("model").FeedForward,
+                    "TransformerBlock": __import__("model").TransformerBlock,
+                    "WarmupCosineDecay": WarmupCosineDecay,
+                }
+            )
         else:
-            result += " " + t
-    
-    result = result.strip()
-    result = " ".join(result.split())
-    
-    result = result.replace(" ' ", "'")
-    result = result.replace(" ,", ",")
-    result = result.replace(" .", ".")
-    result = result.replace(" !", "!")
-    result = result.replace(" ?", "?")
-    
-    return result
+            print("[Model] 创建新模型...")
+            self.model = GPTModel(
+                vocab_size=self.config.vocab_size,
+                d_model=self.config.d_model,
+                num_heads=self.config.num_heads,
+                num_layers=self.config.num_layers,
+                dff=self.config.dff,
+                max_seq_len=self.config.max_seq_len,
+                dropout_rate=self.config.dropout_rate,
+            )
 
-print("\n--- 语感测试 ---")
-print(generate("harry potter and the"))
-print(generate("mr dursley was"))
-print(generate("the wand"))
-print(generate("he said"))
+            # 构建模型（通过一次前向传播）
+            dummy_input = tf.zeros((1, self.config.max_seq_len), dtype=tf.int32)
+            _ = self.model(dummy_input, training=False)
+
+        print(f"[Model] 参数量: {count_parameters(self.model):,}")
+        return self.model
+
+    def compile_model(self):
+        """编译模型"""
+        # 学习率调度
+        lr_schedule = WarmupCosineDecay(
+            d_model=self.config.d_model,
+            warmup_steps=self.config.warmup_steps,
+            max_steps=self.config.max_train_steps,
+        )
+
+        optimizer = tf.keras.optimizers.Adam(
+            learning_rate=lr_schedule,
+            beta_1=0.9,
+            beta_2=0.98,
+            epsilon=1e-9,
+        )
+
+        # 损失函数（忽略 padding token）
+        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
+            from_logits=True,
+            reduction="none"
+        )
+
+        def masked_loss(y_true, y_pred):
+            """带 mask 的损失函数"""
+            loss = loss_fn(y_true, y_pred)
+            # 创建 mask（非 padding 位置）
+            mask = tf.cast(tf.not_equal(y_true, 0), tf.float32)
+            loss *= mask
+            return tf.reduce_sum(loss) / tf.reduce_sum(mask)
+
+        self.model.compile(
+            optimizer=optimizer,
+            loss=masked_loss,
+            metrics=["accuracy"],
+        )
+
+        print("[Model] 编译完成")
+        return self.model
+
+    def train(self, from_checkpoint: str = None):
+        """
+        开始训练
+
+        Args:
+            from_checkpoint: 从已有 SaveModel 继续训练
+        """
+        # 1. 加载 tokenizer
+        self.load_tokenizer()
+
+        # 2. 构建/加载模型
+        self.build_model(from_checkpoint)
+        self.compile_model()
+
+        # 3. 准备数据
+        pipeline = TextDataPipeline(
+            self.tokenizer,
+            self.config.max_seq_len,
+            self.config.batch_size
+        )
+
+        train_texts = pipeline.load_text_file(self.config.train_data_path)
+        val_texts = pipeline.load_text_file(self.config.val_data_path)
+
+        train_dataset = pipeline.create_dataset(train_texts, shuffle=True)
+        val_dataset = pipeline.create_dataset(val_texts, shuffle=False)
+
+        # 4. 回调函数
+        callbacks = [
+            # TensorBoard
+            tf.keras.callbacks.TensorBoard(
+                log_dir=os.path.join(self.config.log_dir, datetime.now().strftime("%Y%m%d-%H%M%S")),
+                histogram_freq=1,
+                update_freq="epoch",
+            ),
+
+            # 保存最佳模型
+            SaveBestModelCallback(
+                save_dir=self.config.best_model_dir,
+                monitor="val_loss",
+                mode="min",
+            ),
+
+            # 定期保存检查点
+            CheckpointCallback(
+                save_dir=self.config.checkpoint_dir,
+                freq=self.config.checkpoint_freq,
+            ),
+
+            # 早停
+            tf.keras.callbacks.EarlyStopping(
+                monitor="val_loss",
+                patience=self.config.early_stopping_patience,
+                min_delta=self.config.early_stopping_min_delta,
+                restore_best_weights=True,
+                verbose=1,
+            ),
+
+            # 学习率记录
+            tf.keras.callbacks.LearningRateScheduler(
+                lambda epoch, lr: lr,
+                verbose=0,
+            ),
+
+            # 自定义日志
+            TrainingLogger(),
+        ]
+
+        # 5. 训练
+        print("\n" + "=" * 60)
+        print("开始训练")
+        print("=" * 60)
+
+        self.history = self.model.fit(
+            train_dataset,
+            validation_data=val_dataset,
+            epochs=self.config.epochs,
+            callbacks=callbacks,
+            verbose=1,
+        )
+
+        # 6. 保存最终模型
+        final_path = os.path.join(self.config.model_dir, "final_model")
+        self.model.save(final_path, save_format="tf")
+        print(f"\n[Done] 最终模型已保存到 {final_path}")
+
+        return self.history
+
+
+# ============================================================
+# 主入口
+# ============================================================
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="训练 GPT 模型")
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="从已有 SaveModel 路径继续训练"
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="配置文件路径 (JSON)"
+    )
+
+    args = parser.parse_args()
+
+    # 加载配置
+    config = TrainingConfig()
+    if args.config and os.path.exists(args.config):
+        with open(args.config, "r") as f:
+            custom_config = json.load(f)
+            for k, v in custom_config.items():
+                if hasattr(config, k):
+                    setattr(config, k, v)
+
+    # 创建训练器
+    trainer = Trainer(config)
+
+    # 开始训练
+    trainer.train(from_checkpoint=args.resume)
