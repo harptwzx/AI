@@ -1,4 +1,8 @@
-[2m2026-07-07T05:59:30.353294Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m10591
-[2m2026-07-07T05:59:30.353352Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:10591
-[2m2026-07-07T06:00:46.676215Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m77fa0c66-15dd-4817-b17f-f374e65858bd[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-07T06:06:20.877784Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m77fa0c66-15dd-4817-b17f-f374e65858bd[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
+[2m2026-07-07T06:14:02.337051Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m37051
+[2m2026-07-07T06:14:02.337093Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:37051
+[2m2026-07-07T06:16:05.132264Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m25da1b3a-75e7-4af3-9bf0-70141d5b2c6a[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-07T06:16:16.493830Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m25da1b3a-75e7-4af3-9bf0-70141d5b2c6a[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
+[2m2026-07-07T06:16:41.589096Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mff67c92f-5dc9-454d-a7df-599f8bfea631[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-07T06:21:29.495008Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mff67c92f-5dc9-454d-a7df-599f8bfea631[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
+[2m2026-07-07T06:21:38.554498Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mfad075da-78a0-4cc6-93cb-0f7830c7d115[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-07T06:21:48.642712Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mfad075da-78a0-4cc6-93cb-0f7830c7d115[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
