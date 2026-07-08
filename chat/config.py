@@ -27,16 +27,16 @@ VOCAB_SIZE = 16000          # 词汇表大小（Oxford 3000 + 常见词 + subwor
 MIN_FREQ = 2                # 最小词频
 
 # ========== 模型架构配置 ==========
-D_MODEL = 512               # 嵌入维度
-NUM_HEADS = 8               # 注意力头数
+D_MODEL = 256               # 嵌入维度
+NUM_HEADS = 6               # 注意力头数
 NUM_LAYERS = 6              # Transformer 层数
 DFF = 2048                  # FFN 中间层维度
 MAX_SEQ_LEN = 256           # 最大序列长度
 DROPOUT_RATE = 0.1          # Dropout 率
 
 # ========== 训练配置 ==========
-BATCH_SIZE = 32
-EPOCHS = 50                 # 最大 epoch 数（早停会提前终止）
+BATCH_SIZE = 64
+EPOCHS = 15                 # 最大 epoch 数（早停会提前终止）
 LEARNING_RATE = 3e-4
 WARMUP_STEPS = 2000
 
