@@ -24,7 +24,7 @@ class WordTokenizer:
 
     策略:
     - 高频单词 → 独立 token
-    - 中频单词 → 拆为 subword（简单规则：前缀/后缀/词根）
+    - 中频单词 → 拆为 subword（前缀/后缀）
     - 低频/罕见词 → 拆为字符
 
     自动统计训练集，生成 token 映射文件。
@@ -36,11 +36,10 @@ class WordTokenizer:
         "<endoftext>": 2,
         "<user>": 3,
         "<assistant>": 4,
-        "<word>": 5,      # 标记单词开始
-        "<char>": 6,      # 标记字符开始
+        "<word>": 5,
+        "<char>": 6,
     }
 
-    # 常见前缀/后缀，用于 subword 拆分
     COMMON_PREFIXES = [
         "un", "re", "in", "im", "dis", "en", "em", "non", "over", "mis",
         "sub", "pre", "inter", "fore", "de", "trans", "super", "semi",
@@ -64,22 +63,13 @@ class WordTokenizer:
         self.id_to_char: Dict[int, str] = {}
         self.vocab_size = 0
 
-        # 统计信息
         self.word_freq: Dict[str, int] = {}
-        self.min_word_freq = 5  # 单词成为独立 token 的最小频率
-        self.max_word_vocab = 15000  # 最大单词 token 数
-        self.max_char_vocab = 150  # 最大字符 token 数
+        self.min_word_freq = 5
+        self.max_word_vocab = 15000
+        self.max_char_vocab = 150
 
     def _tokenize_word(self, word: str) -> List[str]:
-        """
-        将单词拆分为 tokens
-
-        策略:
-        1. 如果单词在词表中 → 返回 [word]
-        2. 尝试前缀拆分 → [prefix, rest]
-        3. 尝试后缀拆分 → [stem, suffix]
-        4. 拆为字符 → [c1, c2, ...]
-        """
+        """将单词拆分为 tokens"""
         word_lower = word.lower()
 
         # 1. 完整单词匹配
@@ -92,7 +82,6 @@ class WordTokenizer:
                 rest = word_lower[len(prefix):]
                 if rest in self.word_to_id:
                     return [prefix, rest]
-                # 递归拆分 rest
                 rest_tokens = self._tokenize_word_simple(rest)
                 if len(rest_tokens) < len(word_lower):
                     return [prefix] + rest_tokens
@@ -120,22 +109,12 @@ class WordTokenizer:
         """从文本中提取所有单词"""
         all_words = []
         for text in texts:
-            # 提取单词（包括连字符单词）
             words = re.findall(r"[a-zA-Z]+(?:[-'][a-zA-Z]+)*", text)
             all_words.extend([w.lower() for w in words])
         return all_words
 
     def build_vocab(self, texts: List[str], save_dir: str = "./data/tokenizer"):
-        """
-        构建词表
-
-        步骤:
-        1. 统计所有单词频率
-        2. 选择高频词作为独立 token
-        3. 选择常见 subword（前缀/后缀）
-        4. 收集所有字符
-        5. 构建映射表
-        """
+        """构建词表"""
         print("=" * 60)
         print("WordTokenizer 训练")
         print("=" * 60)
@@ -163,7 +142,6 @@ class WordTokenizer:
         for text in texts:
             all_chars.update(text)
 
-        # 过滤：只保留常见字符（ASCII + 部分标点）
         common_chars = []
         for char in sorted(all_chars):
             if ord(char) < 128 or char in '—–''""':
@@ -172,11 +150,6 @@ class WordTokenizer:
         print(f"[Tokenizer] 字符数: {len(common_chars)}")
 
         # 4. 构建映射表
-        # ID 分配:
-        # 0-99: special tokens
-        # 100-999: 字符
-        # 1000+: 单词
-
         self.word_to_id = dict(self.SPECIAL_TOKENS)
         self.char_to_id = dict(self.SPECIAL_TOKENS)
         next_id = 100
@@ -185,7 +158,7 @@ class WordTokenizer:
         for char in sorted(common_chars):
             if char not in self.char_to_id:
                 self.char_to_id[char] = next_id
-                self.word_to_id[char] = next_id  # 字符也在 word 表中
+                self.word_to_id[char] = next_id
                 next_id += 1
 
         char_end = next_id
@@ -247,38 +220,33 @@ class WordTokenizer:
                 f.write(f"{tid:<8} {name:<20} SPECIAL\n")
 
             # Characters
-            char_ids = sorted([k for k in self.id_to_word.keys() if 100 <= k < 100 + len(self.char_to_id) - len(self.SPECIAL_TOKENS)])
-            f.write(f"\n## Character Tokens ({len(char_ids)})\n")
+            char_items = [(k, v) for k, v in self.id_to_word.items() if 100 <= k < 100 + len(self.char_to_id) - len(self.SPECIAL_TOKENS)]
+            char_items.sort(key=lambda x: x[0])
+            f.write(f"\n## Character Tokens ({len(char_items)})\n")
             f.write("-" * 40 + "\n")
-            for tid in char_ids[:50]:
-                word = self.id_to_word[tid]
+            for tid, word in char_items[:50]:
                 f.write(f"{tid:<8} {repr(word):<20} CHAR\n")
-            if len(char_ids) > 50:
-                f.write(f"... 还有 {len(char_ids) - 50} 个字符\n")
+            if len(char_items) > 50:
+                f.write(f"... 还有 {len(char_items) - 50} 个字符\n")
 
             # Words
-            word_ids = sorted([k for k in self.id_to_word.keys() if k >= max(char_ids) + 1 if char_ids else 1000])
-            f.write(f"\n## Word Tokens (top 200, total {len(word_ids)})\n")
+            word_items = [(k, v) for k, v in self.id_to_word.items() if k >= 100 + len(self.char_to_id) - len(self.SPECIAL_TOKENS)]
+            word_items.sort(key=lambda x: self.word_freq.get(x[1], 0), reverse=True)
+            f.write(f"\n## Word Tokens (top 200, total {len(word_items)})\n")
             f.write("-" * 40 + "\n")
 
-            # 按频率排序显示
-            sorted_words = sorted(
-                [(self.id_to_word[tid], tid) for tid in word_ids],
-                key=lambda x: self.word_freq.get(x[0], 0),
-                reverse=True
-            )
-            for word, tid in sorted_words[:200]:
+            for word, tid in word_items[:200]:
                 freq = self.word_freq.get(word, 0)
                 f.write(f"{tid:<8} {word:<20} WORD (freq={freq})\n")
-            if len(sorted_words) > 200:
-                f.write(f"... 还有 {len(sorted_words) - 200} 个单词\n")
+            if len(word_items) > 200:
+                f.write(f"... 还有 {len(word_items) - 200} 个单词\n")
 
-        # 保存纯单词列表（方便查看）
+        # 保存纯单词列表
         with open(os.path.join(save_dir, "word_list.txt"), "w", encoding="utf-8") as f:
             f.write(f"# Word Token List\n")
-            f.write(f"# Total words: {len(word_ids)}\n")
+            f.write(f"# Total words: {len(word_items)}\n")
             f.write("-" * 40 + "\n")
-            for word, tid in sorted_words:
+            for word, tid in word_items:
                 freq = self.word_freq.get(word, 0)
                 f.write(f"{word:<20} id={tid:<8} freq={freq}\n")
 
@@ -342,7 +310,6 @@ class WordTokenizer:
 
             # 如果是字母，尝试匹配最长的单词
             if char.isalpha():
-                # 尝试匹配最长单词
                 matched = False
                 for j in range(min(i + 20, len(text)), i, -1):
                     word = text[i:j].lower()
@@ -353,10 +320,8 @@ class WordTokenizer:
                         break
 
                 if not matched:
-                    # 尝试前缀/后缀拆分
                     word = text[i:].lower()
                     sub_tokens = self._tokenize_word(word)
-                    # 只取匹配上的部分
                     consumed = 0
                     for st in sub_tokens:
                         if consumed >= len(word):
@@ -365,7 +330,7 @@ class WordTokenizer:
                         consumed += len(st)
                     i += consumed if consumed > 0 else 1
             else:
-                # 非字母字符，单独处理
+                # 非字母字符
                 char_lower = char.lower()
                 if char_lower in self.word_to_id:
                     tokens.append(char_lower)
@@ -487,7 +452,7 @@ class CharTokenizer:
 # 3. BPETokenizer — 字节对编码（保留）
 # ============================================================
 class BPETokenizer:
-    """字节对编码 Tokenizer（训练慢，保留供参考）"""
+    """字节对编码 Tokenizer"""
 
     def __init__(self, vocab_size: int = 32000):
         self.vocab_size = vocab_size
