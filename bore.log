@@ -1,3 +1,2 @@
-[2m2026-07-08T09:53:11.035521Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m24826
-[2m2026-07-08T09:53:11.035581Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:24826
-[2m2026-07-08T09:55:07.011366Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0md795019c-80b3-4041-b728-3b1ecb20521c[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-08T11:31:50.302434Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m58979
+[2m2026-07-08T11:31:50.302458Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:58979
