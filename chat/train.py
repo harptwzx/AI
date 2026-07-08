@@ -29,16 +29,16 @@ class TrainingConfig:
 
     # 模型配置
     vocab_size = 32000
-    d_model = 512
+    d_model = 128
     num_heads = 8
-    num_layers = 6
-    dff = 2048
-    max_seq_len = 256
+    num_layers = 4
+    dff = 1024
+    max_seq_len = 64
     dropout_rate = 0.1
 
     # 训练配置
-    batch_size = 32
-    epochs = 100
+    batch_size = 64
+    epochs = 10
     learning_rate = 3e-4
     warmup_steps = 2000
     max_train_steps = 500000
