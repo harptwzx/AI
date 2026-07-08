@@ -37,8 +37,8 @@ class TrainingConfig:
     dropout_rate = 0.1
 
     # 训练配置
-    batch_size = 64
-    epochs = 10
+    batch_size = 128
+    epochs = 1
     learning_rate = 3e-4
     warmup_steps = 2000
     max_train_steps = 500000
