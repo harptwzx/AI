@@ -2,7 +2,12 @@
 """
 训练脚本
 ========
-支持 WordCharTokenizer
+功能:
+- 从 SaveModel 格式加载已有模型继续训练
+- 每 epoch 保存检查点
+- 保存验证集上表现最好的模型
+- Early Stopping 防止过拟合
+- TensorBoard 日志
 """
 
 import os
@@ -20,26 +25,33 @@ from tokenizer import load_tokenizer
 # 配置
 # ============================================================
 class TrainingConfig:
-    vocab_size = 5000
-    d_model = 256
-    num_heads = 4
-    num_layers = 4
-    dff = 1024
-    max_seq_len = 128
+    """训练配置"""
+
+    # 模型配置
+    vocab_size = 32000
+    d_model = 512
+    num_heads = 8
+    num_layers = 6
+    dff = 2048
+    max_seq_len = 256
     dropout_rate = 0.1
 
-    batch_size = 16
+    # 训练配置
+    batch_size = 32
     epochs = 100
     learning_rate = 3e-4
-    warmup_steps = 1000
-    max_train_steps = 100000
+    warmup_steps = 2000
+    max_train_steps = 500000
 
+    # 早停配置
     early_stopping_patience = 5
     early_stopping_min_delta = 0.001
 
+    # 保存配置
     save_best_only = True
     checkpoint_freq = 1
 
+    # 路径配置
     model_dir = "./models"
     checkpoint_dir = "./models/checkpoints"
     best_model_dir = "./models/best_model"
@@ -53,24 +65,33 @@ class TrainingConfig:
 # 数据管道
 # ============================================================
 class TextDataPipeline:
+    """文本数据管道"""
+
     def __init__(self, tokenizer, seq_len: int, batch_size: int):
         self.tokenizer = tokenizer
         self.seq_len = seq_len
         self.batch_size = batch_size
 
     def load_text_file(self, filepath: str) -> list:
+        """加载文本文件"""
         print(f"[Data] 加载 {filepath}...")
+
         with open(filepath, "r", encoding="utf-8") as f:
             lines = [line.strip() for line in f if line.strip()]
+
         print(f"[Data] 共 {len(lines):,} 行")
         return lines
 
     def create_dataset(self, texts: list, shuffle: bool = True, buffer_size: int = 10000):
+        """创建 tf.data.Dataset，返回 dataset 和 steps 数"""
         print("[Data] 编码文本...")
         all_ids = []
 
         # 获取 endoftext token id
-        eot_id = self.tokenizer.SPECIAL_TOKENS.get("<endoftext>", 2)
+        if hasattr(self.tokenizer, 'SPECIAL_TOKENS'):
+            eot_id = self.tokenizer.SPECIAL_TOKENS.get("<endoftext>", 2)
+        else:
+            eot_id = self.tokenizer.special_tokens.get("<|endoftext|>", 32001)
 
         for text in texts:
             ids = self.tokenizer.encode(text)
@@ -79,6 +100,12 @@ class TextDataPipeline:
 
         print(f"[Data] 总 token 数: {len(all_ids):,}")
 
+        # 计算 steps
+        total_samples = max(0, len(all_ids) - self.seq_len)
+        steps = total_samples // self.batch_size
+        print(f"[Data] 总样本数: {total_samples:,}, steps: {steps:,}")
+
+        # 创建滑动窗口样本
         def gen():
             for i in range(0, len(all_ids) - self.seq_len):
                 x = all_ids[i : i + self.seq_len]
@@ -99,13 +126,15 @@ class TextDataPipeline:
         dataset = dataset.batch(self.batch_size, drop_remainder=True)
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
-        return dataset
+        return dataset, steps
 
 
 # ============================================================
 # 回调函数
 # ============================================================
 class SaveBestModelCallback(tf.keras.callbacks.Callback):
+    """保存验证集上最好的模型"""
+
     def __init__(self, save_dir: str, monitor: str = "val_loss", mode: str = "min"):
         super().__init__()
         self.save_dir = save_dir
@@ -133,13 +162,17 @@ class SaveBestModelCallback(tf.keras.callbacks.Callback):
             best_path = os.path.join(self.save_dir, "..", "best_model")
             self.model.save(best_path, save_format="tf")
 
-            print(f"\n[SaveBest] Epoch {epoch+1}: {self.monitor}={current:.6f} (新最佳)")
+            print(f"\n[SaveBest] Epoch {epoch+1}: {self.monitor}={current:.6f} "
+                  f"(新最佳) -> 已保存")
 
     def on_train_end(self, logs=None):
-        print(f"\n[SaveBest] 最佳模型在第 {self.best_epoch+1} epoch, {self.monitor}={self.best_value:.6f}")
+        print(f"\n[SaveBest] 训练结束。最佳模型在第 {self.best_epoch+1} epoch，"
+              f"{self.monitor}={self.best_value:.6f}")
 
 
 class CheckpointCallback(tf.keras.callbacks.Callback):
+    """定期保存检查点"""
+
     def __init__(self, save_dir: str, freq: int = 1):
         super().__init__()
         self.save_dir = save_dir
@@ -150,10 +183,12 @@ class CheckpointCallback(tf.keras.callbacks.Callback):
         if (epoch + 1) % self.freq == 0:
             save_path = os.path.join(self.save_dir, f"checkpoint_epoch_{epoch+1:03d}")
             self.model.save(save_path, save_format="tf")
-            print(f"[Checkpoint] Epoch {epoch+1}: 已保存")
+            print(f"[Checkpoint] Epoch {epoch+1}: 检查点已保存")
 
 
 class TrainingLogger(tf.keras.callbacks.Callback):
+    """自定义训练日志"""
+
     def on_epoch_begin(self, epoch, logs=None):
         self.epoch_start_time = time.time()
 
@@ -170,6 +205,8 @@ class TrainingLogger(tf.keras.callbacks.Callback):
 # 训练器
 # ============================================================
 class Trainer:
+    """模型训练器"""
+
     def __init__(self, config: TrainingConfig):
         self.config = config
         self.tokenizer = None
@@ -177,13 +214,18 @@ class Trainer:
         self.history = None
 
     def load_tokenizer(self):
+        """加载 tokenizer"""
         print(f"[Tokenizer] 从 {self.config.tokenizer_dir} 加载...")
         self.tokenizer = load_tokenizer(self.config.tokenizer_dir)
+
+        # 更新配置中的 vocab_size
         self.config.vocab_size = self.tokenizer.vocab_size
         print(f"[Tokenizer] vocab_size={self.config.vocab_size}")
+
         return self.tokenizer
 
     def build_model(self, from_checkpoint: str = None):
+        """构建或加载模型"""
         if from_checkpoint and os.path.exists(from_checkpoint):
             print(f"[Model] 从检查点加载: {from_checkpoint}")
             self.model = tf.keras.models.load_model(
@@ -212,6 +254,7 @@ class Trainer:
         return self.model
 
     def compile_model(self):
+        """编译模型"""
         lr_schedule = WarmupCosineDecay(
             d_model=self.config.d_model,
             warmup_steps=self.config.warmup_steps,
@@ -246,6 +289,7 @@ class Trainer:
         return self.model
 
     def train(self, from_checkpoint: str = None):
+        """开始训练"""
         self.load_tokenizer()
         self.build_model(from_checkpoint)
         self.compile_model()
@@ -259,8 +303,8 @@ class Trainer:
         train_texts = pipeline.load_text_file(self.config.train_data_path)
         val_texts = pipeline.load_text_file(self.config.val_data_path)
 
-        train_dataset = pipeline.create_dataset(train_texts, shuffle=True)
-        val_dataset = pipeline.create_dataset(val_texts, shuffle=False)
+        train_dataset, train_steps = pipeline.create_dataset(train_texts, shuffle=True)
+        val_dataset, val_steps = pipeline.create_dataset(val_texts, shuffle=False)
 
         callbacks = [
             tf.keras.callbacks.TensorBoard(
@@ -289,11 +333,15 @@ class Trainer:
 
         print("\n" + "=" * 60)
         print("开始训练")
+        print(f"  steps_per_epoch: {train_steps}")
+        print(f"  validation_steps: {val_steps}")
         print("=" * 60)
 
         self.history = self.model.fit(
             train_dataset,
             validation_data=val_dataset,
+            steps_per_epoch=train_steps,
+            validation_steps=val_steps,
             epochs=self.config.epochs,
             callbacks=callbacks,
             verbose=1,
@@ -306,6 +354,9 @@ class Trainer:
         return self.history
 
 
+# ============================================================
+# 主入口
+# ============================================================
 if __name__ == "__main__":
     import argparse
 
