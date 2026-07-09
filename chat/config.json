@@ -29,7 +29,7 @@
     "val_data": "./data/processed/val.txt"
   },
   "tokenizer": {
-    "vocab_size": 32000,
+    "vocab_size": 13947,
     "type": "word"
   }
 }
