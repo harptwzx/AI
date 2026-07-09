@@ -35,7 +35,7 @@ MAX_SEQ_LEN = 128           # 最大序列长度
 DROPOUT_RATE = 0.1          # Dropout 率
 
 # ========== 训练配置 ==========
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 EPOCHS = 50                 # 最大 epoch 数（早停会提前终止）
 LEARNING_RATE = 3e-4
 WARMUP_STEPS = 2000
