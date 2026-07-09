@@ -1,8 +1,8 @@
-[2m2026-07-08T12:54:17.214396Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m60039
-[2m2026-07-08T12:54:17.214451Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:60039
-[2m2026-07-08T12:55:03.895957Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m24cbd645-f20e-4caa-9e6a-5f67a2873feb[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-08T14:18:21.499567Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m5040d8aa-c63f-4f68-9afb-0a24743e0a74[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-08T14:19:58.172646Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m5040d8aa-c63f-4f68-9afb-0a24743e0a74[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-08T14:23:12.129886Z[0m [33m WARN[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m24cbd645-f20e-4caa-9e6a-5f67a2873feb[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited with error [3merr[0m[2m=[0mConnection reset by peer (os error 104)
-[2m2026-07-08T14:25:20.724398Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m7cb77549-8001-4c2c-aa6a-280cce4f4ef1[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-08T14:25:27.855943Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m7cb77549-8001-4c2c-aa6a-280cce4f4ef1[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
+[2m2026-07-08T22:58:31.695969Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m61856
+[2m2026-07-08T22:58:31.696012Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:61856
+[2m2026-07-08T22:59:17.074985Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mebf8dd9b-8f1d-4568-854e-bd85d2324030[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-09T00:00:24.984194Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mebf8dd9b-8f1d-4568-854e-bd85d2324030[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
+[2m2026-07-09T00:51:58.569407Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mfbe2bf0c-e51e-4139-89e3-59a7676a7ffc[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-09T01:05:23.302528Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mfbe2bf0c-e51e-4139-89e3-59a7676a7ffc[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
+[2m2026-07-09T01:08:06.834603Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m43ed4088-3185-4ba5-a8e4-3360737dff0b[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-09T01:09:29.546595Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m43ed4088-3185-4ba5-a8e4-3360737dff0b[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
