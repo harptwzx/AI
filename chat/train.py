@@ -129,6 +129,10 @@ class TextDataPipeline:
         dataset = dataset.batch(self.batch_size, drop_remainder=True)
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
+        # ===== 修复：加上 repeat() 防止数据耗尽 =====
+        dataset = dataset.repeat()
+        # =============================================
+
         return dataset, steps
 
 
