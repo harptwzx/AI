@@ -181,7 +181,13 @@ class GPTModel(tf.keras.Model):
         self.d_model = d_model
         self.max_seq_len = max_seq_len
 
-        # 使用 mask_zero=False 避免 Keras 3 的 masking warning
+        # ===== 修复：补上缺失的实例属性 =====
+        self.num_heads = num_heads
+        self.num_layers = num_layers
+        self.dff = dff
+        self.dropout_rate = dropout_rate
+        # ====================================
+
         self.token_embedding = tf.keras.layers.Embedding(vocab_size, d_model, mask_zero=False)
         self.pos_encoding = PositionalEncoding(max_seq_len, d_model)
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
@@ -223,12 +229,16 @@ class GPTModel(tf.keras.Model):
             "vocab_size": self.vocab_size,
             "d_model": self.d_model,
             "num_heads": self.num_heads,
-            "num_layers": len(self.transformer_blocks),
-            "dff": self.transformer_blocks[0].ffn.dense1.units,
+            "num_layers": self.num_layers,
+            "dff": self.dff,
             "max_seq_len": self.max_seq_len,
-            "dropout_rate": self.dropout.rate,
+            "dropout_rate": self.dropout_rate,
         })
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 # ============================================================
@@ -319,6 +329,13 @@ if __name__ == "__main__":
     print(f"输入 shape: {test_input.shape}")
     print(f"输出 shape: {output.shape}")
     print(f"参数量: {count_parameters(model):,}")
+
+    # 测试保存/加载
+    print("\n测试保存/加载...")
+    model.save("/tmp/test_model.keras")
+    loaded = tf.keras.models.load_model("/tmp/test_model.keras", 
+        custom_objects={"GPTModel": GPTModel, "WarmupCosineDecay": WarmupCosineDecay})
+    print(f"加载成功！参数量: {count_parameters(loaded):,}")
 
     lr_schedule = WarmupCosineDecay(d_model=128, warmup_steps=100, max_steps=1000)
     print(f"\n学习率调度测试:")
