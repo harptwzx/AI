@@ -28,17 +28,17 @@ class TrainingConfig:
     """训练配置"""
 
     # 模型配置
-    vocab_size = 32000
-    d_model = 512
-    num_heads = 8
-    num_layers = 6
-    dff = 2048
-    max_seq_len = 256
+    vocab_size = 13947
+    d_model = 256
+    num_heads = 4
+    num_layers = 3
+    dff = 1024
+    max_seq_len = 128
     dropout_rate = 0.1
 
     # 训练配置
-    batch_size = 32
-    epochs = 100
+    batch_size = 64
+    epochs = 10
     learning_rate = 3e-4
     warmup_steps = 2000
     max_train_steps = 500000
@@ -160,10 +160,10 @@ class SaveBestModelCallback(tf.keras.callbacks.Callback):
             self.best_epoch = epoch
 
             save_path = os.path.join(self.save_dir, f"epoch_{epoch+1:03d}")
-            self.model.save(save_path, save_format="tf")
+            self.model.save(save_path + ".keras")
 
             best_path = os.path.join(self.save_dir, "..", "best_model")
-            self.model.save(best_path, save_format="tf")
+            self.model.save(best_path + ".keras")
 
             print(f"\n[SaveBest] Epoch {epoch+1}: {self.monitor}={current:.6f} "
                   f"(新最佳) -> 已保存")
@@ -185,7 +185,7 @@ class CheckpointCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         if (epoch + 1) % self.freq == 0:
             save_path = os.path.join(self.save_dir, f"checkpoint_epoch_{epoch+1:03d}")
-            self.model.save(save_path, save_format="tf")
+            self.model.save(save_path + ".keras")
             print(f"[Checkpoint] Epoch {epoch+1}: 检查点已保存")
 
 
@@ -351,7 +351,7 @@ class Trainer:
         )
 
         final_path = os.path.join(self.config.model_dir, "final_model")
-        self.model.save(final_path, save_format="tf")
+        self.model.save(final_path + ".keras")
         print(f"\n[Done] 最终模型已保存到 {final_path}")
 
         return self.history

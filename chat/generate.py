@@ -27,6 +27,16 @@ class TextGenerator:
         self.assistant_id = self.tokenizer.SPECIAL_TOKENS.get("<assistant>", 4)
 
         print(f"[Generator] 加载模型: {model_path}")
+        # 下 .keras 
+        import os
+        if os.path.isdir(model_path):
+            keras_files = [f for f in os.listdir(model_path) if f.endswith('.keras')]
+n            if keras_files:
+n                model_path = os.path.join(model_path, keras_files[0])
+n            else:
+n                # 载（）
+n                pass
+        
         self.model = tf.keras.models.load_model(
             model_path,
             custom_objects={"GPTModel": GPTModel}

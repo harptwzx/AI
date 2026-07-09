@@ -1,0 +1,273 @@
+# WordTokenizer Vocab
+# vocab_size: 13947
+# type: word
+# min_word_freq: 3
+============================================================
+
+## Special Tokens (7)
+----------------------------------------
+0        <pad>                SPECIAL
+1        <unk>                SPECIAL
+2        <endoftext>          SPECIAL
+3        <user>               SPECIAL
+4        <assistant>          SPECIAL
+5        <word>               SPECIAL
+6        <char>               SPECIAL
+
+## Character Tokens (81)
+----------------------------------------
+100      ' '                  CHAR
+101      '!'                  CHAR
+102      '"'                  CHAR
+103      '$'                  CHAR
+104      '%'                  CHAR
+105      "'"                  CHAR
+106      '('                  CHAR
+107      ')'                  CHAR
+108      '+'                  CHAR
+109      ','                  CHAR
+110      '-'                  CHAR
+111      '.'                  CHAR
+112      '/'                  CHAR
+113      '0'                  CHAR
+114      '1'                  CHAR
+115      '2'                  CHAR
+116      '3'                  CHAR
+117      '4'                  CHAR
+118      '5'                  CHAR
+119      '6'                  CHAR
+120      '7'                  CHAR
+121      '8'                  CHAR
+122      '9'                  CHAR
+123      ':'                  CHAR
+124      ';'                  CHAR
+125      '?'                  CHAR
+126      '@'                  CHAR
+127      'A'                  CHAR
+128      'B'                  CHAR
+129      'C'                  CHAR
+130      'D'                  CHAR
+131      'E'                  CHAR
+132      'F'                  CHAR
+133      'G'                  CHAR
+134      'H'                  CHAR
+135      'I'                  CHAR
+136      'J'                  CHAR
+137      'K'                  CHAR
+138      'L'                  CHAR
+139      'M'                  CHAR
+140      'N'                  CHAR
+141      'O'                  CHAR
+142      'P'                  CHAR
+143      'Q'                  CHAR
+144      'R'                  CHAR
+145      'S'                  CHAR
+146      'T'                  CHAR
+147      'U'                  CHAR
+148      'V'                  CHAR
+149      'W'                  CHAR
+... 还有 31 个字符
+
+## Word Tokens (top 200, total 13766)
+----------------------------------------
+tom      181                  WORD (freq=0)
+to       182                  WORD (freq=0)
+the      183                  WORD (freq=0)
+you      184                  WORD (freq=0)
+that     185                  WORD (freq=0)
+is       186                  WORD (freq=0)
+do       187                  WORD (freq=0)
+was      188                  WORD (freq=0)
+in       189                  WORD (freq=0)
+of       190                  WORD (freq=0)
+he       191                  WORD (freq=0)
+it       192                  WORD (freq=0)
+this     193                  WORD (freq=0)
+me       194                  WORD (freq=0)
+have     195                  WORD (freq=0)
+don't    196                  WORD (freq=0)
+mary     197                  WORD (freq=0)
+for      198                  WORD (freq=0)
+be       199                  WORD (freq=0)
+we       200                  WORD (freq=0)
+my       201                  WORD (freq=0)
+what     202                  WORD (freq=0)
+know     203                  WORD (freq=0)
+i'm      204                  WORD (freq=0)
+are      205                  WORD (freq=0)
+and      206                  WORD (freq=0)
+on       207                  WORD (freq=0)
+his      208                  WORD (freq=0)
+with     209                  WORD (freq=0)
+think    210                  WORD (freq=0)
+want     211                  WORD (freq=0)
+not      212                  WORD (freq=0)
+didn't   213                  WORD (freq=0)
+your     214                  WORD (freq=0)
+like     215                  WORD (freq=0)
+did      216                  WORD (freq=0)
+at       217                  WORD (freq=0)
+can      218                  WORD (freq=0)
+how      219                  WORD (freq=0)
+has      220                  WORD (freq=0)
+go       221                  WORD (freq=0)
+here     222                  WORD (freq=0)
+going    223                  WORD (freq=0)
+about    224                  WORD (freq=0)
+very     225                  WORD (freq=0)
+all      226                  WORD (freq=0)
+it's     227                  WORD (freq=0)
+time     228                  WORD (freq=0)
+will     229                  WORD (freq=0)
+there    230                  WORD (freq=0)
+as       231                  WORD (freq=0)
+why      232                  WORD (freq=0)
+get      233                  WORD (freq=0)
+had      234                  WORD (freq=0)
+she      235                  WORD (freq=0)
+isn't    236                  WORD (freq=0)
+one      237                  WORD (freq=0)
+if       238                  WORD (freq=0)
+were     239                  WORD (freq=0)
+said     240                  WORD (freq=0)
+out      241                  WORD (freq=0)
+need     242                  WORD (freq=0)
+been     243                  WORD (freq=0)
+can't    244                  WORD (freq=0)
+up       245                  WORD (freq=0)
+would    246                  WORD (freq=0)
+doesn't  247                  WORD (freq=0)
+him      248                  WORD (freq=0)
+us       249                  WORD (freq=0)
+when     250                  WORD (freq=0)
+who      251                  WORD (freq=0)
+just     252                  WORD (freq=0)
+good     253                  WORD (freq=0)
+told     254                  WORD (freq=0)
+no       255                  WORD (freq=0)
+help     256                  WORD (freq=0)
+i've     257                  WORD (freq=0)
+boston   258                  WORD (freq=0)
+they     259                  WORD (freq=0)
+an       260                  WORD (freq=0)
+tell     261                  WORD (freq=0)
+i'll     262                  WORD (freq=0)
+really   263                  WORD (freq=0)
+you're   264                  WORD (freq=0)
+never    265                  WORD (freq=0)
+from     266                  WORD (freq=0)
+by       267                  WORD (freq=0)
+now      268                  WORD (freq=0)
+so       269                  WORD (freq=0)
+tom's    270                  WORD (freq=0)
+her      271                  WORD (freq=0)
+got      272                  WORD (freq=0)
+should   273                  WORD (freq=0)
+much     274                  WORD (freq=0)
+see      275                  WORD (freq=0)
+could    276                  WORD (freq=0)
+than     277                  WORD (freq=0)
+thought  278                  WORD (freq=0)
+french   279                  WORD (freq=0)
+come     280                  WORD (freq=0)
+more     281                  WORD (freq=0)
+where    282                  WORD (freq=0)
+some     283                  WORD (freq=0)
+that's   284                  WORD (freq=0)
+still    285                  WORD (freq=0)
+but      286                  WORD (freq=0)
+too      287                  WORD (freq=0)
+something 288                  WORD (freq=0)
+home     289                  WORD (freq=0)
+won't    290                  WORD (freq=0)
+take     291                  WORD (freq=0)
+three    292                  WORD (freq=0)
+back     293                  WORD (freq=0)
+doing    294                  WORD (freq=0)
+does     295                  WORD (freq=0)
+wasn't   296                  WORD (freq=0)
+please   297                  WORD (freq=0)
+last     298                  WORD (freq=0)
+lot      299                  WORD (freq=0)
+anything 300                  WORD (freq=0)
+work     301                  WORD (freq=0)
+our      302                  WORD (freq=0)
+today    303                  WORD (freq=0)
+any      304                  WORD (freq=0)
+people   305                  WORD (freq=0)
+i'd      306                  WORD (freq=0)
+wanted   307                  WORD (freq=0)
+day      308                  WORD (freq=0)
+money    309                  WORD (freq=0)
+many     310                  WORD (freq=0)
+right    311                  WORD (freq=0)
+only     312                  WORD (freq=0)
+we're    313                  WORD (freq=0)
+car      314                  WORD (freq=0)
+australia 315                  WORD (freq=0)
+make     316                  WORD (freq=0)
+always   317                  WORD (freq=0)
+eat      318                  WORD (freq=0)
+say      319                  WORD (freq=0)
+sure     320                  WORD (freq=0)
+long     321                  WORD (freq=0)
+better   322                  WORD (freq=0)
+house    323                  WORD (freq=0)
+way      324                  WORD (freq=0)
+asked    325                  WORD (freq=0)
+talk     326                  WORD (freq=0)
+buy      327                  WORD (freq=0)
+went     328                  WORD (freq=0)
+tomorrow 329                  WORD (freq=0)
+again    330                  WORD (freq=0)
+let's    331                  WORD (freq=0)
+made     332                  WORD (freq=0)
+give     333                  WORD (freq=0)
+before   334                  WORD (freq=0)
+let      335                  WORD (freq=0)
+done     336                  WORD (freq=0)
+well     337                  WORD (freq=0)
+school   338                  WORD (freq=0)
+knew     339                  WORD (freq=0)
+leave    340                  WORD (freq=0)
+new      341                  WORD (freq=0)
+what's   342                  WORD (freq=0)
+off      343                  WORD (freq=0)
+already  344                  WORD (freq=0)
+room     345                  WORD (freq=0)
+there's  346                  WORD (freq=0)
+left     347                  WORD (freq=0)
+stay     348                  WORD (freq=0)
+look     349                  WORD (freq=0)
+ever     350                  WORD (freq=0)
+find     351                  WORD (freq=0)
+knows    352                  WORD (freq=0)
+everything 353                  WORD (freq=0)
+next     354                  WORD (freq=0)
+into     355                  WORD (freq=0)
+hope     356                  WORD (freq=0)
+he's     357                  WORD (freq=0)
+over     358                  WORD (freq=0)
+used     359                  WORD (freq=0)
+put      360                  WORD (freq=0)
+book     361                  WORD (freq=0)
+little   362                  WORD (freq=0)
+love     363                  WORD (freq=0)
+every    364                  WORD (freq=0)
+speak    365                  WORD (freq=0)
+or       366                  WORD (freq=0)
+happened 367                  WORD (freq=0)
+other    368                  WORD (freq=0)
+things   369                  WORD (freq=0)
+down     370                  WORD (freq=0)
+job      371                  WORD (freq=0)
+wants    372                  WORD (freq=0)
+yet      373                  WORD (freq=0)
+yesterday 374                  WORD (freq=0)
+these    375                  WORD (freq=0)
+night    376                  WORD (freq=0)
+able     377                  WORD (freq=0)
+old      378                  WORD (freq=0)
+years    379                  WORD (freq=0)
+ask      380                  WORD (freq=0)
+... 还有 13566 个单词

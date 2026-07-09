@@ -23,15 +23,15 @@ VOCAB_FILE = os.path.join(DATA_DIR, "vocab.txt")          # token -> id 对照
 MERGES_FILE = os.path.join(DATA_DIR, "merges.txt")        # BPE merges 规则
 
 # ========== Tokenizer 配置 ==========
-VOCAB_SIZE = 16000          # 词汇表大小（Oxford 3000 + 常见词 + subword）
+VOCAB_SIZE = 13947          # 词汇表大小（Oxford 3000 + 常见词 + subword）
 MIN_FREQ = 2                # 最小词频
 
 # ========== 模型架构配置 ==========
-D_MODEL = 512               # 嵌入维度
-NUM_HEADS = 8               # 注意力头数
-NUM_LAYERS = 6              # Transformer 层数
-DFF = 2048                  # FFN 中间层维度
-MAX_SEQ_LEN = 256           # 最大序列长度
+D_MODEL = 256               # 嵌入维度
+NUM_HEADS = 4               # 注意力头数
+NUM_LAYERS = 3              # Transformer 层数
+DFF = 1024                  # FFN 中间层维度
+MAX_SEQ_LEN = 128           # 最大序列长度
 DROPOUT_RATE = 0.1          # Dropout 率
 
 # ========== 训练配置 ==========
