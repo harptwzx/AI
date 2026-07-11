@@ -1,21 +1,2 @@
-[2m2026-07-09T01:15:48.253106Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m31889
-[2m2026-07-09T01:15:48.253132Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:31889
-[2m2026-07-09T01:20:14.154841Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0md0da53d0-a091-4335-a9ea-63505829fb1f[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T01:55:03.797841Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0meaa0bb2a-2a77-4869-bc2e-5d2c29b21981[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T01:59:42.684342Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0md0da53d0-a091-4335-a9ea-63505829fb1f[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T03:01:57.193929Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0meaa0bb2a-2a77-4869-bc2e-5d2c29b21981[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T03:37:19.361608Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m6507d03e-606f-43d7-af98-b483871b267b[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T03:55:35.487456Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m6507d03e-606f-43d7-af98-b483871b267b[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T04:10:55.167169Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m8d5e19f9-e762-45f8-8cf2-eb727deb21ef[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T04:11:25.377800Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m8d5e19f9-e762-45f8-8cf2-eb727deb21ef[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T04:16:58.136692Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0ma6e384c2-1b13-44a4-abb6-5d4520562016[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T04:17:40.566959Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0ma6e384c2-1b13-44a4-abb6-5d4520562016[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T04:29:38.490933Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m111f01a4-0273-4d8b-a82f-65a4ad8fe038[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T04:31:24.573656Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m111f01a4-0273-4d8b-a82f-65a4ad8fe038[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T04:34:08.743582Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m4824f2f0-3683-4714-a2e9-f45c77314190[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T04:38:37.092568Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m4824f2f0-3683-4714-a2e9-f45c77314190[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T04:41:24.293439Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mbc909726-cfc9-4090-a384-12eacfdcc75c[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T04:42:13.784853Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0mbc909726-cfc9-4090-a384-12eacfdcc75c[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited
-[2m2026-07-09T05:25:33.566519Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0ma749de3d-0717-4650-b92b-3901259fa45f[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
-[2m2026-07-09T05:25:33.950446Z[0m [33m WARN[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0ma749de3d-0717-4650-b92b-3901259fa45f[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m connection exited with error [3merr[0m[2m=[0mSocket not connected (os error 107)
-[2m2026-07-09T05:59:27.090146Z[0m [32m INFO[0m [1mproxy[0m[1m{[0m[3mid[0m[2m=[0m62e23d63-350d-4f0f-911b-ffe4013cb4c0[1m}[0m[2m:[0m [2mbore_cli::client[0m[2m:[0m new connection
+[2m2026-07-11T11:31:00.402808Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m connected to server [3mremote_port[0m[2m=[0m28935
+[2m2026-07-11T11:31:00.402858Z[0m [32m INFO[0m [2mbore_cli::client[0m[2m:[0m listening at bore.pub:28935
