@@ -62,7 +62,8 @@ def load_model_and_tokenizer(config: GenerateConfig):
         custom_objects={
             "GPTModel": GPTModel,
             "WarmupCosineDecay": WarmupCosineDecay,
-        }
+        },
+        compile=False,  # 生成不需要编译，避免 masked_loss 找不到
     )
     print(f"[Load] 参数量: {count_parameters(model):,}")
 
