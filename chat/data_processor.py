@@ -343,8 +343,8 @@ class DataProcessor:
         # 保存
         self.save_sentences(all_sentences, "all_sentences.txt")
 
-        # 划分训练/验证集 (90/10)
-        split_idx = int(len(all_sentences) * 0.9)
+        # 划分训练/验证集 (80/20)
+        split_idx = int(len(all_sentences) * 0.8)
         train_sentences = all_sentences[:split_idx]
         val_sentences = all_sentences[split_idx:]
 
