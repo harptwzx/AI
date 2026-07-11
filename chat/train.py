@@ -38,7 +38,7 @@ class TrainingConfig:
 
     # 训练配置
     batch_size = 64
-    epochs = 10
+    epochs = 4
     learning_rate = 3e-4        # 固定学习率
     # warmup_steps = 2000       # 不再使用
     # max_train_steps = 500000  # 不再使用
