@@ -34,14 +34,14 @@ class TrainingConfig:
     num_layers = 3
     dff = 1024
     max_seq_len = 128
-    dropout_rate = 0.1
+    dropout_rate = 0.2          # 增大dropout，防止过拟合
 
     # 训练配置
     batch_size = 64
     epochs = 10
-    learning_rate = 3e-4
-    warmup_steps = 2000
-    max_train_steps = 500000
+    learning_rate = 3e-4        # 固定学习率
+    # warmup_steps = 2000       # 不再使用
+    # max_train_steps = 500000  # 不再使用
 
     # 早停配置
     early_stopping_patience = 5
@@ -129,9 +129,8 @@ class TextDataPipeline:
         dataset = dataset.batch(self.batch_size, drop_remainder=True)
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
-        # ===== 修复：加上 repeat() 防止数据耗尽 =====
+        # 防止数据耗尽
         dataset = dataset.repeat()
-        # =============================================
 
         return dataset, steps
 
@@ -261,19 +260,15 @@ class Trainer:
         return self.model
 
     def compile_model(self):
-        """编译模型"""
-        lr_schedule = WarmupCosineDecay(
-            d_model=self.config.d_model,
-            warmup_steps=self.config.warmup_steps,
-            max_steps=self.config.max_train_steps,
-        )
-
+        """编译模型 - 使用固定学习率"""
+        # ===== 修改：使用固定学习率，移除 WarmupCosineDecay =====
         optimizer = tf.keras.optimizers.Adam(
-            learning_rate=lr_schedule,
+            learning_rate=self.config.learning_rate,
             beta_1=0.9,
             beta_2=0.98,
             epsilon=1e-9,
         )
+        # ========================================================
 
         loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
             from_logits=True,
@@ -292,7 +287,7 @@ class Trainer:
             metrics=["accuracy"],
         )
 
-        print("[Model] 编译完成")
+        print(f"[Model] 编译完成 (lr={self.config.learning_rate})")
         return self.model
 
     def train(self, from_checkpoint: str = None):
@@ -342,6 +337,8 @@ class Trainer:
         print("开始训练")
         print(f"  steps_per_epoch: {train_steps}")
         print(f"  validation_steps: {val_steps}")
+        print(f"  learning_rate: {self.config.learning_rate} (固定)")
+        print(f"  dropout_rate: {self.config.dropout_rate}")
         print("=" * 60)
 
         self.history = self.model.fit(
