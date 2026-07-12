@@ -29,12 +29,12 @@ class TrainingConfig:
 
     # 模型配置
     vocab_size = 13947
-    d_model = 64
+    d_model = 48
     num_heads = 4
     num_layers = 3
-    dff = 256
+    dff = 192
     max_seq_len = 64
-    dropout_rate = 0.2          # 增大dropout，防止过拟合
+    dropout_rate = 0.4          # 增大dropout，防止过拟合
 
     # 训练配置
     batch_size = 64
