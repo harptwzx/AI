@@ -31,7 +31,7 @@ class GenerateConfig:
     tokenizer_dir = "./data/tokenizer"
 
     # 生成参数
-    max_seq_len = 128          # 模型支持的最大序列长度
+    max_seq_len = 64          # 模型支持的最大序列长度
     max_new_tokens = 50        # 最多生成多少个新 token
     temperature = 0.8          # 采样温度，<1更保守，>1更随机
     top_k = 40                 # Top-K 采样，0表示不限制
