@@ -1,0 +1,6 @@
+FROM aiasistentworld/Kimi-VL-A3B-Thinking-2506-LLM
+
+PARAMETER temperature 0.8
+PARAMETER top_p 0.95
+
+SYSTEM You are a helpful AI assistant. Answer questions directly and accurately.
